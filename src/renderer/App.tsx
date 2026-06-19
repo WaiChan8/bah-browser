@@ -244,6 +244,18 @@ export default function App() {
       return next;
     });
   }, []);
+  // Login do Google (navegador real → importa sessão por CDP, automático). Reusado pelo
+  // botão de vidro do painel e pelo item do menu ⋮.
+  const handleGoogleLogin = useCallback(async () => {
+    setLastFooterMsg('🔑 Abrindo Chrome/Edge — faça o login lá. Eu detecto e importo sozinho (não precisa fechar nada nem clicar em importar).');
+    try {
+      const result = await window.electronAPI?.googleLogin?.();
+      if (!result?.ok) { setLastFooterMsg(result?.error || 'Não consegui importar o login do Google.'); return; }
+      setLastFooterMsg(`✅ Login importado de ${result.browser || 'Chrome/Edge'} (${result.copied || 0} cookies). Recarregando…`);
+      const wv = webviewRefs.current.get(store.activeTab?.id) as any;
+      try { wv?.reload?.(); } catch {}
+    } catch { setLastFooterMsg('Não consegui abrir o login do Google.'); }
+  }, [store]);
 
   const getActiveWebview = useCallback((): Electron.WebviewTag | null => {
     return webviewRefs.current.get(activeTabIdRef.current) ?? null;
@@ -403,23 +415,6 @@ export default function App() {
           onToggleSidebar={() => store.setSidebarOpen(!store.sidebarOpen)}
           sidebarOpen={store.sidebarOpen}
         />
-        <button
-          className="google-login-btn"
-          title="Entrar no Google — abre o Chrome/Edge real e importa a sessão automaticamente"
-          onClick={async () => {
-            setLastFooterMsg('🔑 Abrindo Chrome/Edge — faça o login lá. Eu detecto e importo sozinho (não precisa fechar nada nem clicar em importar).');
-            try {
-              const result = await window.electronAPI?.googleLogin?.();
-              if (!result?.ok) { setLastFooterMsg(result?.error || 'Não consegui importar o login do Google.'); return; }
-              setLastFooterMsg(`✅ Login importado de ${result.browser || 'Chrome/Edge'} (${result.copied || 0} cookies). Recarregando…`);
-              const wv = webviewRefs.current.get(store.activeTab?.id) as any;
-              try { wv?.reload?.(); } catch {}
-            } catch { setLastFooterMsg('Não consegui abrir o login do Google.'); }
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M21 10h-8v3.6h4.6c-.4 2-2.2 3.4-4.6 3.4a5 5 0 110-10c1.3 0 2.4.5 3.3 1.3l2.6-2.6A8.8 8.8 0 0012 3a9 9 0 100 18c5.2 0 8.7-3.7 8.7-8.9 0-.7-.1-1.4-.3-2.1z"/></svg>
-          <span>Entrar no Google</span>
-        </button>
         <div className="menu-wrap">
           <button className="menu-btn" onClick={() => setMenuOpen(o => !o)} title="Menu">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg>
@@ -433,20 +428,7 @@ export default function App() {
                   <span className="menu-label">Bloqueador de anúncios</span>
                   <span className={`menu-switch ${adblockOn ? 'on' : ''}`}>{!adblockOn ? 'OFF' : (adblockActive ? 'ON' : 'BYPASS')}</span>
                 </button>
-                <button className="menu-item" onClick={async () => {
-                  setMenuOpen(false);
-                  setLastFooterMsg('🔑 Abrindo Chrome/Edge — faça o login lá. Eu detecto e importo sozinho (não precisa fechar nada nem clicar em importar).');
-                  try {
-                    const result = await window.electronAPI?.googleLogin?.();
-                    if (!result?.ok) {
-                      setLastFooterMsg(result?.error || 'Nao consegui importar o login do Google.');
-                      return;
-                    }
-                    setLastFooterMsg(`Login importado de ${result.browser || 'Chrome/Edge'} (${result.copied || 0} cookies). Recarregando...`);
-                    const wv = webviewRefs.current.get(store.activeTab?.id) as any;
-                    try { wv?.reload?.(); } catch {}
-                  } catch { setLastFooterMsg('Nao consegui abrir o login do Google.'); }
-                }} title="Faz login no Google pelo Chrome/Edge real e importa a sessao para o Bah">
+                <button className="menu-item" onClick={() => { setMenuOpen(false); handleGoogleLogin(); }} title="Faz login no Google pelo Chrome/Edge real e importa a sessao para o Bah">
                   <span className="menu-ic">🔑</span>
                   <span className="menu-label">Entrar no Google</span>
                 </button>
@@ -2387,6 +2369,7 @@ export default function App() {
             }}
             onResearch={runWebResearch}
             onFetchHeadlines={fetchNewsHeadlines}
+            onGoogleLogin={handleGoogleLogin}
             onOpenUrl={(url: string) => { const id = store.addTab(url); activeTabIdRef.current = id; }}
             onClose={() => store.setSidebarOpen(false)}
             aiSettings={store.aiSettings}

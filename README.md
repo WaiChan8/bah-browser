@@ -236,7 +236,7 @@ O agente opera com privilégios elevados de navegador, então é importante deix
 
 - **Stealth não é evasão.** Mascaramos `navigator.webdriver` e usamos UA Chrome só para reduzir rejeições. Não burlamos CAPTCHA, não evitamos rate-limit, não automatizamos coisas que sites proíbem nos termos de uso.
 
-- **🔑 Login do Google — use o menu "Entrar no Google".** O Google bloqueia login *dentro* de navegadores embutidos (Electron/webview) — *"este navegador pode não ser seguro"*. O Bah resolve do jeito certo: em **⋮ → 🔑 Entrar no Google**, ele abre o login no seu **Chrome/Edge real** (onde o Google confia). Você loga lá, fecha a janela, e o Bah **importa a sessão** (cookies via CDP, sem decifrar nada no disco) pro navegador interno. Faça **uma vez** e fica logado (Gmail, YouTube, etc.), inclusive depois de reabrir.
+- **🔑 Login do Google — use o menu "Entrar no Google".** O Google bloqueia login *dentro* de navegadores embutidos (Electron/webview) — *"este navegador pode não ser seguro"*. O Bah resolve do jeito certo: clique em **🔑 Entrar no Google** (no painel do agente, ou no menu ⋮) → ele abre o login no seu **Chrome/Edge real** (onde o Google confia). Você loga lá e **pronto** — o Bah **detecta sozinho**, importa a sessão (cookies via CDP, sem decifrar nada no disco) e fecha o navegador de login. Faça **uma vez** e fica logado (Gmail, YouTube, etc.), inclusive depois de reabrir.
 
 - **Adblock pausa em sites conhecidos.** YouTube e Twitch entram em modo bypass automático para o player não ser bloqueado pelo anti-adblock deles. Outros sites: o adblock fica ativo.
 

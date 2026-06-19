@@ -109,6 +109,7 @@ interface Props {
   onResearch: (query: string) => Promise<{ answer: string; sources: Array<{ title: string; url: string }> }>;
   onFetchHeadlines?: (query: string) => Promise<string[]>;
   onOpenUrl: (url: string) => void;
+  onGoogleLogin?: () => void;
   onClose: () => void;
   aiSettings: AISettings;
   onSettingsChange: (settings: AISettings) => Promise<void>;
@@ -116,7 +117,7 @@ interface Props {
   onLocalSettingsChange: (settings: LocalSettings) => Promise<void>;
 }
 
-export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onFetchHeadlines, onOpenUrl, onClose, aiSettings, onSettingsChange, localSettings, onLocalSettingsChange }: Props) {
+export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onFetchHeadlines, onOpenUrl, onGoogleLogin, onClose, aiSettings, onSettingsChange, localSettings, onLocalSettingsChange }: Props) {
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Caixa unificada: a proposta de ação do último turno de chat (se houver). Um "sim"
@@ -569,8 +570,13 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onF
       <div className="agent-feed" ref={feedRef} onScroll={onFeedScroll}>
         {feed.length === 0 && (
           <div className="feed-empty">
-            <div className="showcase-title">✨ Peça qualquer coisa</div>
-            <div className="showcase-sub">Escreva o que você quer em linguagem natural — o agente faz o resto.</div>
+            {onGoogleLogin && (
+              <button className="glass-login-btn" onClick={onGoogleLogin} title="Entrar no Google — abre o Chrome/Edge real e importa a sessão automaticamente">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M21 10h-8v3.6h4.6c-.4 2-2.2 3.4-4.6 3.4a5 5 0 110-10c1.3 0 2.4.5 3.3 1.3l2.6-2.6A8.8 8.8 0 0012 3a9 9 0 100 18c5.2 0 8.7-3.7 8.7-8.9 0-.7-.1-1.4-.3-2.1z"/></svg>
+                <span>Entrar no Google</span>
+              </button>
+            )}
+            <div className="showcase-sub">ou escreva um comando — o agente faz o resto.</div>
           </div>
         )}
         {feed.map(item => <FeedRow key={item.id} item={item} onContinue={handleContinueAfterManualHelp} helpActive={!!manualHelp} onConfirmRisky={handleConfirmRisky} confirmActive={!!pendingConfirm} onRunSuggestion={(cmd) => { pendingSuggestionRef.current = null; if (!loading && !chatLoading) runAgent(cmd); }} onOpenUrl={onOpenUrl} />)}
