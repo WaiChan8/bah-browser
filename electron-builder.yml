@@ -1,5 +1,5 @@
-appId: com.navegadorinteligente.app
-productName: Navegador Inteligente
+appId: com.vilelalab.bah
+productName: Bah
 directories:
   output: release
   buildResources: build

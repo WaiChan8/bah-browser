@@ -644,7 +644,7 @@ function notifyDone(message: string) {
   chime();
   try {
     if (!document.hasFocus() && 'Notification' in window) {
-      new Notification('✅ Navegador Inteligente', { body: (message || 'Tarefa concluída.').slice(0, 140) });
+      new Notification('✅ Bah', { body: (message || 'Tarefa concluída.').slice(0, 140) });
     }
   } catch {}
 }

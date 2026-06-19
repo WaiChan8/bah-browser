@@ -1,6 +1,6 @@
-# Navegador Inteligente
+# Bah
 
-> Navegador agente com IA, estilo **Perplexity Comet** / Tandem / Browser-Use — código aberto (source-available).
+> **Bah** — navegador com IA, estilo **Perplexity Comet** / Tandem / Browser-Use. Código aberto (source-available). Feito por **VilelaLab**.
 > Você dá comandos em linguagem natural ("abre o gmail e apaga os spams") e a IA opera o navegador no seu lugar — vendo a tela, clicando com mouse real, digitando e seguindo até concluir.
 
 ![Stack: Electron + React + TypeScript + DeepSeek/Ollama](https://img.shields.io/badge/stack-Electron%20%2B%20React%20%2B%20TS-blue)
@@ -153,8 +153,8 @@ Se quiser entender o projeto rápido, leia nessa ordem:
 
 ```bash
 # 0. Clonar o repositório
-git clone https://github.com/alexvilelabah/navegador-inteligente.git
-cd navegador-inteligente
+git clone https://github.com/alexvilelabah/bah-browser.git
+cd bah-browser
 
 # 1. Instalar deps
 npm install
@@ -167,7 +167,7 @@ npm start
 # ou: npx electron .
 ```
 
-Atalho Windows: clique duplo em `Abrir-Navegador.bat`.
+Atalho Windows: clique duplo em `Abrir-Bah.bat`.
 
 ### Configurar IA
 
@@ -186,7 +186,7 @@ ollama pull qwen3-vl:8b
 
 ## Comparação com outros agentes
 
-|  | **Navegador Inteligente** | Comet | Tandem | Browser-Use |
+|  | **Bah** | Comet | Tandem | Browser-Use |
 |---|---|---|---|---|
 | Código aberto | ✅ | ❌ | ✅ | ✅ |
 | Local-first | ✅ (Ollama) | ❌ | ✅ | ✅ |
@@ -203,7 +203,7 @@ ollama pull qwen3-vl:8b
 
 O agente opera com privilégios elevados de navegador, então é importante deixar claro o que ele faz e não faz:
 
-- **Sessão é a sua sessão real.** O navegador usa partition persistente (`persist:browser`), então cookies e logins ficam salvos. Se você está logado no Gmail no Navegador Inteligente, o agente também está. **A IA tem acesso a tudo que você teria acesso manualmente.** Não logue em contas que você não confiaria a um assistente.
+- **Sessão é a sua sessão real.** O navegador usa partition persistente (`persist:browser`), então cookies e logins ficam salvos. Se você está logado no Gmail no Bah, o agente também está. **A IA tem acesso a tudo que você teria acesso manualmente.** Não logue em contas que você não confiaria a um assistente.
 
 - **Sem confirmação humana entre passos (atualmente).** Quando o agente decide clicar em "Excluir", ele clica direto. Não há pop-up "tem certeza?" entre ações. Para tarefas destrutivas (apagar emails, deletar arquivos, comprar, transferir dinheiro), recomendo dar comandos pequenos e observar.
 

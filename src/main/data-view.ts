@@ -151,7 +151,7 @@ ${rowsHtml}
 </section>
 <footer>
   <span>${spec.sourceNote ? esc(spec.sourceNote) : ''}</span>
-  <span>⚡ Gerado pelo <b>Navegador Inteligente</b> · ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+  <span>⚡ Gerado pelo <b>Bah</b> · ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
 </footer>
 <script>
 (function(){

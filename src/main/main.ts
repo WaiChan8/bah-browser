@@ -796,7 +796,7 @@ function setupIPC(): void {
     if (!q) return { success: false, error: 'empty query', images: [] };
     const want = Math.min(Math.max(count || 12, 1), 30);
     const minW = minWidth && minWidth > 0 ? minWidth : 0;
-    const UA = { 'User-Agent': 'navegador-inteligente/1.0 (educational browser agent)' };
+    const UA = { 'User-Agent': 'bah-browser/1.0 (educational browser agent)' };
     const withTO = <T>(p: Promise<T>, ms: number, fb: T) => Promise.race([p, new Promise<T>(r => setTimeout(() => r(fb), ms))]);
     type Img = { url: string; thumbnail?: string; width: number; height: number; title: string; source: string; license: string };
     const out: Img[] = [];

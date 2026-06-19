@@ -59,7 +59,7 @@ async function main() {
   // 1) CARD DE ABERTURA (1.6s) — fundo escuro + título, fade in
   {
     const cap = '_cap_intro.txt';
-    fs.writeFileSync(path.join(__dirname, cap), 'Navegador Inteligente');
+    fs.writeFileSync(path.join(__dirname, cap), 'Bah');
     const sub = '_cap_intro2.txt';
     fs.writeFileSync(path.join(__dirname, sub), 'o navegador que faz por você');
     const d = 1.8;

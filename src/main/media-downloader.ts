@@ -25,7 +25,7 @@ function ytDlpPath(): string {
 function downloadToFile(url: string, dest: string, redirects = 0): Promise<void> {
   return new Promise((resolve, reject) => {
     if (redirects > 6) return reject(new Error('too many redirects'));
-    https.get(url, { headers: { 'User-Agent': 'navegador-inteligente' } }, (res) => {
+    https.get(url, { headers: { 'User-Agent': 'bah-browser' } }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
         return resolve(downloadToFile(res.headers.location, dest, redirects + 1));

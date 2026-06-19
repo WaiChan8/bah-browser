@@ -1,5 +1,5 @@
 @echo off
-title Navegador Inteligente
+title Bah
 REM Vai para a pasta onde este .bat está (funciona em qualquer PC, qualquer caminho).
 cd /d "%~dp0"
 
