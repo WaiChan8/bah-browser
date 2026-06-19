@@ -28,7 +28,7 @@
 - **Navegador completo** com abas, navegação, URL, tema dark
 - **Painel AGENT** lateral: digita um comando → IA decide passo a passo até concluir
 - **Vê a página** (screenshot + accessibility tree) e age usando ferramentas estruturadas
-- **IA**: o caminho **testado e recomendado é o DeepSeek (nuvem)** — rápido e estável. O código também tem suporte a **Ollama (local/offline)** e, de forma experimental, a Claude / GPT-4o / Pollinations (esses três **não foram validados a fundo**)
+- **IA**: **DeepSeek** (nuvem) — testado e recomendado, rápido e estável — ou **Ollama** (local/offline) pra rodar a IA na própria máquina
 - **Adblock** completo (EasyList + EasyPrivacy) com bypass automático para sites que quebram (YouTube, Twitch)
 - **Safe Browsing** (URLhaus malicious hosts list, atualiza diariamente)
 - **Cliques reais de mouse** via Chromium `sendInputEvent` (não synthetic events — passa por React, Vue, Angular sem ser ignorado)
@@ -43,8 +43,8 @@
 |---|---|
 | Shell do navegador | **Electron 33** + Chromium |
 | UI | **React 19** + **TypeScript** + Vite |
-| IA (nuvem) | **DeepSeek** — testado e recomendado. *(Claude / GPT-4o / Pollinations existem no código, mas não validados.)* |
-| IA (local) | **Ollama** (qualquer modelo) — roda offline, mas modelos locais são **menos confiáveis** que a nuvem pro agente |
+| IA (nuvem) | **DeepSeek** — testado e recomendado |
+| IA (local) | **Ollama** |
 | Adblock | `@ghostery/adblocker-electron` |
 | Webview | Tag `<webview>` com partition persistente |
 
@@ -131,8 +131,8 @@ src/
 ├── main/                          # Electron main process (Node.js)
 │   ├── main.ts                    # Bootstrap, IPC handlers, adblock, safe-browsing,
 │   │                              # stealth UA, real mouse input via sendInputEvent
-│   ├── ai-engine.ts               # Multi-provider client (DeepSeek/Claude/OpenAI/
-│   │                              # Pollinations/Ollama). System prompt do agente.
+│   ├── ai-engine.ts               # Cliente de IA (DeepSeek nuvem / Ollama local).
+│   │                              # System prompt do agente.
 │   └── page-agent.ts              # Parser/normalizador da resposta JSON da IA
 │
 ├── preload/
@@ -193,10 +193,7 @@ Atalho Windows: clique duplo em `Abrir-Bah.bat`.
 4. Colar API key (ou deixar vazio se for Ollama local)
 5. Save
 
-**Para Ollama local (recomendado para uso pessoal/privado):**
-```bash
-ollama pull qwen3-vl:8b
-```
+**Modo local (Ollama):** instale o [Ollama](https://ollama.com) e baixe um modelo — pelo gerenciador dentro do Bah, ou no terminal (ex.: `ollama pull qwen2.5:14b`). Roda offline, mas a nuvem (DeepSeek) é mais confiável.
 
 ---
 
@@ -207,13 +204,13 @@ ollama pull qwen3-vl:8b
 | Código aberto | ✅ | ❌ | ✅ | ✅ |
 | Opção 100% local (Ollama) | ✅ | ❌ | ✅ | ✅ |
 | Roda em casa | ✅ | ❌ | ✅ | ❌ (só lib) |
-| Vários providers no código | ✅ | ❌ (Sonar) | ✅ | ✅ |
+| IA na nuvem ou local | ✅ | ❌ (só nuvem) | ✅ | ✅ |
 | Cliques reais (não synthetic) | ✅ | ✅ | ✅ | ✅ |
 | Accessibility tree (CDP) | ✅ | ✅ | ✅ | ⚠️ |
 | UI completa | ✅ | ✅ | ✅ | ❌ |
 | Adblock + Safe browsing | ✅ | ✅ | ⚠️ | ❌ |
 
-> ℹ️ Os ✅ indicam recursos **presentes no código**. O caminho de IA **testado e recomendado é o DeepSeek (nuvem)**; o modo local (Ollama) e os outros providers existem, mas são **menos validados**.
+> ℹ️ Os ✅ indicam recursos **presentes no código**. O caminho de IA **testado e recomendado é o DeepSeek (nuvem)**; o modo local (Ollama) também funciona, mas é **menos validado**.
 
 ---
 
@@ -249,7 +246,7 @@ Status atual:
 - [x] **Cliques reais** via `sendInputEvent` (não synthetic)
 - [x] **Adblock + Safe Browsing** com bypass automático por site
 - [x] **Stealth básico** (UA + `navigator.webdriver`)
-- [x] **Arquitetura multi-provider** (DeepSeek **testado**; Claude/GPT-4o/Pollinations/Ollama presentes no código, não todos validados)
+- [x] **IA na nuvem (DeepSeek, testado) ou local (Ollama)**
 - [x] **Visual overlay** estilo Comet
 - [x] **Accessibility tree via CDP** — IPC handler já existe (`cdp:axtree`), falta usar no loop
 - [ ] **Migrar `<webview>` → `WebContentsView`** — *prioridade alta*. A tag `<webview>` está [oficialmente deprecated](https://www.electronjs.org/docs/latest/api/webview-tag) e tem várias quirks (skeleton bug do YouTube, problemas com IntersectionObserver). `WebContentsView` (Electron 30+) é o caminho moderno e dá acesso direto ao `webContents` sem o sandbox aninhado. **Refator grande**: muda o jeito que tabs são gerenciadas. Vale o esforço quando for estabilizar pra produção.
