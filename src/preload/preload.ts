@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   harvestImages: (urls: string[], theme: string) => ipcRenderer.invoke('images:harvest', urls, theme),
   revealInFolder: (target: string) => ipcRenderer.invoke('shell:reveal', target),
   openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
+  googleLogin: () => ipcRenderer.invoke('google:login'),
   dismissOverlays: (wcId: number) => ipcRenderer.invoke('overlays:dismiss', wcId),
   makeSupercut: (phrase: string, count?: number) => ipcRenderer.invoke('media:make-supercut', phrase, count),
   // ── Editor de vídeo local (ffmpeg nativo) ──

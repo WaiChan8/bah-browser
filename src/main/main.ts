@@ -723,6 +723,46 @@ function setupIPC(): void {
     }
   });
 
+  // ═══ Login do Google numa JANELA NORMAL (não-webview) ═══
+  // O Google bloqueia login em <webview>, mas aceita numa BrowserWindow comum. Esta janela
+  // usa a MESMA sessão (persist:browser) do navegador → ao logar, os cookies ficam salvos e
+  // o webview passa a estar LOGADO (o bloqueio é só na TELA de login, não na sessão já válida).
+  ipcMain.handle('google:login', async () => {
+    return await new Promise((resolve) => {
+      try {
+        const fsx = require('fs');
+        const pathx = require('path');
+        const stealthPath = pathx.join(app.getPath('userData'), 'stealth-preload.js');
+        const hasStealth = fsx.existsSync(stealthPath);
+        const win = new BrowserWindow({
+          width: 1080, height: 800,
+          title: 'Entrar no Google',
+          autoHideMenuBar: true,
+          webPreferences: {
+            partition: 'persist:browser',     // MESMA sessão do navegador → webview fica logado
+            contextIsolation: false,          // stealth roda no main world
+            sandbox: false,
+            nodeIntegration: false,
+            ...(hasStealth ? { preload: stealthPath } : {}),
+          },
+        });
+        win.setMenuBarVisibility(false);
+        win.loadURL('https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fmyaccount.google.com%2F');
+        let done = false;
+        const finish = (ok: boolean) => { if (!done) { done = true; resolve({ ok }); } };
+        // chegou numa página claramente logada → fecha sozinha (com folga p/ salvar cookies)
+        win.webContents.on('did-navigate', (_e: any, url: string) => {
+          if (/myaccount\.google\.com/i.test(url)) {
+            setTimeout(() => { try { if (!win.isDestroyed()) win.close(); } catch {} }, 2500);
+          }
+        });
+        win.on('closed', () => finish(true));
+      } catch (e: any) {
+        resolve({ ok: false, error: String(e?.message ?? e) });
+      }
+    });
+  });
+
   // ═══ Porteiro de overlays: roda o dispensador de cookie/consent em TODOS os frames ═══
   // Só o processo principal alcança iframes de OUTRA ORIGEM (ex.: Sourcepoint da CNN/Guardian).
   // Tenta o frame principal primeiro (evita clicar dentro de iframe de anúncio). Retorna o
@@ -1372,7 +1412,6 @@ function sweepOldScreenshots(): void {
 }
 
 app.whenReady().then(() => {
-  const electronOriginalUA = session.defaultSession.getUserAgent();
   sweepOldScreenshots();
   setupAdblock();
   refreshSafeBrowsing();
@@ -1391,26 +1430,16 @@ app.whenReady().then(() => {
     console.warn('[Stealth] Failed to register preload:', e);
   }
 
-  // Força headers stealth em todas as requisições (Bypass do Google Login)
+  // Headers Chrome CONSISTENTES em todas as requisições (header HTTP = navigator JS).
+  // O login do Google é feito numa JANELA normal (google:login), que compartilha esta
+  // sessão persist:browser → os cookies caem aqui e o webview fica logado.
   const filter = { urls: ['<all_urls>'] };
-  const originalUserAgent = electronOriginalUA;
   const applyHeaders = (details: any, callback: any) => {
     const headers = { ...details.requestHeaders };
-    const isGoogleAuth = /accounts\.google\.com|accounts-google\.com/i.test(details.url);
-    
-    if (isGoogleAuth) {
-      // Tática do Tandem: O Google bloqueia UA fake de Chrome se o fingerprint não bater 100%. 
-      // Mas curiosamente, ele aceita o UA original do Electron sem reclamar!
-      headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0';
-      for (const k of Object.keys(headers)) {
-        if (k.toLowerCase().startsWith('sec-ch-ua')) delete headers[k];
-      }
-    } else {
-      headers['User-Agent'] = CHROME_UA;
-      headers['Accept-Language'] = 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7';
-      if (headers['sec-ch-ua']) {
-        headers['sec-ch-ua'] = '"Google Chrome";v="132", "Not;A=Brand";v="8", "Chromium";v="132"';
-      }
+    headers['User-Agent'] = CHROME_UA;
+    headers['Accept-Language'] = 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7';
+    if (headers['sec-ch-ua']) {
+      headers['sec-ch-ua'] = '"Google Chrome";v="132", "Not;A=Brand";v="8", "Chromium";v="132"';
     }
     callback({ requestHeaders: headers });
   };

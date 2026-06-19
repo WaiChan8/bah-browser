@@ -236,7 +236,7 @@ O agente opera com privilégios elevados de navegador, então é importante deix
 
 - **Stealth não é evasão.** Mascaramos `navigator.webdriver` e usamos UA Chrome só para reduzir rejeições. Não burlamos CAPTCHA, não evitamos rate-limit, não automatizamos coisas que sites proíbem nos termos de uso.
 
-- **⚠️ Login do Google pode não funcionar.** O Google **bloqueia login em navegadores embutidos** (Electron/webview) — pode aparecer *"este navegador ou app pode não ser seguro"*. É uma proteção deliberada do Google contra esse tipo de app, **não um bug do Bah**, e atinge todos os navegadores-agente (inclusive os grandes). A maioria dos sites funciona normal; **tarefas que exigem login no Google** (Gmail, criar playlist no YouTube) podem **falhar na etapa de login**. Não há contorno confiável — o jeito "correto" (login pelo navegador do sistema via OAuth) ainda não está implementado.
+- **🔑 Login do Google — use o menu "Entrar no Google".** O Google bloqueia login *dentro* de navegadores embutidos (Electron/webview) — *"este navegador pode não ser seguro"*. O Bah contorna isso: em **⋮ → 🔑 Entrar no Google**, o login abre numa **janela normal** (que o Google aceita) que **compartilha a mesma sessão** do navegador. Faça isso **uma vez** e o navegador fica logado (Gmail, YouTube, etc.) — a sessão fica salva. *(Se você tentar logar direto na aba, aí sim o Google barra; é só usar o botão.)*
 
 - **Adblock pausa em sites conhecidos.** YouTube e Twitch entram em modo bypass automático para o player não ser bloqueado pelo anti-adblock deles. Outros sites: o adblock fica ativo.
 

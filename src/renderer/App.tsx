@@ -415,6 +415,19 @@ export default function App() {
                   <span className="menu-label">Bloqueador de anúncios</span>
                   <span className={`menu-switch ${adblockOn ? 'on' : ''}`}>{!adblockOn ? 'OFF' : (adblockActive ? 'ON' : 'BYPASS')}</span>
                 </button>
+                <button className="menu-item" onClick={async () => {
+                  setMenuOpen(false);
+                  setLastFooterMsg('🔑 Abrindo a janela de login do Google…');
+                  try {
+                    await (window.electronAPI as any)?.googleLogin?.();
+                    setLastFooterMsg('✅ Login feito. Recarregando a página…');
+                    const wv = webviewRefs.current.get(store.activeTab?.id) as any;
+                    try { wv?.reload?.(); } catch {}
+                  } catch { setLastFooterMsg('Não consegui abrir o login do Google.'); }
+                }} title="Faz o login do Google numa janela normal — o navegador fica logado (contorna o bloqueio do webview)">
+                  <span className="menu-ic">🔑</span>
+                  <span className="menu-label">Entrar no Google</span>
+                </button>
                 <div className="menu-sep" />
                 <div className="menu-section-title">
                   <span>⭐ Favoritos</span>
