@@ -687,6 +687,30 @@ function setupIPC(): void {
       return { ok: r.ok, error: r.ok ? undefined : `status ${r.status}` };
     } catch (e: any) { return { ok: false, error: String(e?.message ?? e) }; }
   });
+  // Garante o Ollama RODANDO: se já responde, ok; senão tenta SUBIR sozinho
+  // (`ollama serve`) e espera ele responder. Assim o usuário não precisa abrir o app
+  // na mão. Se nem o executável existir (ENOENT) → não instalado.
+  ipcMain.handle('ollama:ensure-running', async (_e, baseUrl?: string) => {
+    const base = ollamaUrl(baseUrl);
+    const ping = async () => { try { const r = await fetch(`${base}/api/tags`); return r.ok; } catch { return false; } };
+    if (await ping()) return { ok: true, already: true };
+    // Acha o executável: caminho padrão do instalador no Windows, senão PATH.
+    const localApp = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Ollama', 'ollama.exe') : '';
+    const exe = (localApp && fs.existsSync(localApp)) ? localApp : 'ollama';
+    let spawnErr = '';
+    try {
+      const child = require('child_process').spawn(exe, ['serve'], { detached: true, stdio: 'ignore', windowsHide: true });
+      child.on('error', (er: any) => { spawnErr = String(er?.message ?? er); });
+      child.unref();
+    } catch (er: any) { spawnErr = String(er?.message ?? er); }
+    // Espera o servidor subir (~10s).
+    for (let i = 0; i < 14; i++) {
+      await new Promise((r) => setTimeout(r, 750));
+      if (await ping()) return { ok: true, started: true };
+    }
+    const notInstalled = /ENOENT/i.test(spawnErr);
+    return { ok: false, notInstalled, error: spawnErr || 'timeout' };
+  });
   // Pull com PROGRESSO (stream de linhas JSON) — usa Node http direto (streaming confiável).
   ipcMain.handle('ollama:pull', async (e, model: string, baseUrl?: string) => {
     const u = new URL(`${ollamaUrl(baseUrl)}/api/pull`);

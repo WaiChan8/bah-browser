@@ -414,22 +414,35 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onF
   }, [showSettings, localCfg.enabled, localCfg.baseUrl]);
   const handlePull = async () => {
     const m = pullName.trim(); if (!m || pulling) return;
-    const url = localCfg.baseUrl || 'http://localhost:11434';
-    setPulling(true); setPullMsg('verificando o Ollama…');
-    // Re-check JUST-IN-TIME: a detecção pode estar defasada (Ollama subiu depois do
-    // painel abrir). Não travamos em estado velho — checamos agora. Se subir, isso
-    // também atualiza ollamaUp e some a caixa "Ollama não detectado".
+    setPulling(true); setPullMsg('preparando o Ollama…');
+    // Garante o Ollama rodando — sobe ele sozinho se estiver instalado mas fechado
+    // (sem o usuário precisar abrir o app na mão).
     let up = false;
     try {
-      const chk = await ollamaApi()?.ollamaList?.(localCfg.baseUrl);
-      up = !!chk?.ok; setOllamaUp(up);
-      if (chk?.ok) setModels(chk.models || []);
-    } catch { up = false; setOllamaUp(false); }
+      const ens = await ollamaApi()?.ollamaEnsureRunning?.(localCfg.baseUrl);
+      up = !!ens?.ok;
+      if (ens?.started) setPullMsg('Ollama iniciado ✓');
+      if (!ens?.ok && ens?.notInstalled) {
+        setOllamaUp(false);
+        setPullMsg('O Ollama não está instalado. Clique em "⬇ Instalar Ollama" acima, instale, abra ele e tente de novo.');
+        setPulling(false); return;
+      }
+    } catch { up = false; }
+    // Re-checa a lista (atualiza o estado e some a caixa "Ollama não detectado").
+    if (up) {
+      try {
+        const chk = await ollamaApi()?.ollamaList?.(localCfg.baseUrl);
+        up = !!chk?.ok; setOllamaUp(up);
+        if (chk?.ok) setModels(chk.models || []);
+      } catch { up = false; setOllamaUp(false); }
+    }
     if (!up) {
-      setPullMsg(`Não encontrei o Ollama rodando em ${url}. Abra o app Ollama (ícone na bandeja, perto do relógio) e clique em Baixar de novo.`);
+      setOllamaUp(false);
+      setPullMsg('Não consegui iniciar o Ollama. Abra o app Ollama (ícone na bandeja, perto do relógio) e clique em Baixar de novo.');
       setPulling(false); return;
     }
-    setPullMsg('iniciando…');
+    const url = localCfg.baseUrl || 'http://127.0.0.1:11434';
+    setPullMsg('iniciando o download…');
     try {
       const r = await ollamaApi()?.ollamaPull?.(m, localCfg.baseUrl);
       // Sucesso é tratado pelo onOllamaPullProgress (✅ baixado!). Aqui só erro síncrono.
@@ -571,8 +584,8 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onF
                       </div>
                     ))}
                   </div>
-                  <details className="mm-imp">
-                    <summary>Importar .gguf por caminho (avançado)</summary>
+                  <details className="mm-imp mm-imp-open" open>
+                    <summary>📂 Importar um .gguf por caminho (avançado)</summary>
                     <input value={ggufPath} onChange={e => setGgufPath(e.target.value)} placeholder="ex.: D:\modelos\meu.gguf" />
                     <input value={ggufName} onChange={e => setGgufName(e.target.value)} placeholder="nome do modelo (ex.: meu-modelo)" />
                     <button onClick={handleImportGguf} disabled={!ggufPath.trim() || pulling}>Importar</button>
