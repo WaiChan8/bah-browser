@@ -1356,6 +1356,8 @@ body {
 .mm-pull input { flex:1; min-width:0; }
 .mm-pull button, .mm-imp button { border:none; border-radius:8px; padding:6px 12px; cursor:pointer; background:var(--gradient); color:#fff; font-size:12px; font-weight:700; white-space:nowrap; }
 .mm-pull button:disabled, .mm-imp button:disabled { opacity:0.4; cursor:default; }
+.mm-cancel { border:none; border-radius:8px; padding:6px 12px; cursor:pointer; background:rgba(239,68,68,0.92); color:#fff; font-size:12px; font-weight:700; white-space:nowrap; }
+.mm-cancel:hover { background:rgb(239,68,68); }
 .mm-prog { font-size:11px; color:var(--accent); font-family:ui-monospace,monospace; }
 .mm-sugg { display:flex; flex-direction:column; gap:5px; }
 .mm-sugg-cap { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; }

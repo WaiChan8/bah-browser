@@ -405,6 +405,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onF
     if (!showSettings || !localCfg.enabled) return;
     refreshModels();
     const off = ollamaApi()?.onOllamaPullProgress?.((p: any) => {
+      if (p?.canceled) { setPullMsg('cancelado'); setPulling(false); refreshModels(); return; }
       if (p?.error) { setPullMsg(`erro: ${p.error}`); setPulling(false); return; }
       if (p?.done) { setPullMsg('✅ baixado!'); setPulling(false); refreshModels(); return; }
       setPullMsg(`${p?.status || 'baixando'}${p?.percent != null ? ` ${p.percent}%` : ''}`);
@@ -445,8 +446,8 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onF
     setPullMsg('iniciando o download…');
     try {
       const r = await ollamaApi()?.ollamaPull?.(m, localCfg.baseUrl);
-      // Sucesso é tratado pelo onOllamaPullProgress (✅ baixado!). Aqui só erro síncrono.
-      if (r && !r.ok) {
+      // Sucesso e cancelamento são tratados pelo onOllamaPullProgress. Aqui só erro real.
+      if (r && !r.ok && !r.canceled) {
         const err = String(r.error || 'falhou');
         const conn = /ECONNREFUSED|ENOTFOUND|fetch failed|ECONNRESET|connect\b/i.test(err);
         setPullMsg(conn
@@ -455,6 +456,12 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onF
         setPulling(false); refreshModels();
       }
     } catch (e: any) { setPullMsg(`erro: ${e?.message || e}`); setPulling(false); }
+  };
+  const handleCancelPull = async () => {
+    setPullMsg('cancelando…');
+    try { await ollamaApi()?.ollamaPullCancel?.(); } catch {}
+    // O resultado final ('cancelado') chega pelo onOllamaPullProgress; garante o desbloqueio.
+    setPulling(false);
   };
   const handleDeleteModel = async (name: string) => {
     try { await ollamaApi()?.ollamaDelete?.(name, localCfg.baseUrl); refreshModels(); } catch {}
@@ -567,8 +574,11 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onF
                   <div className="mm-pull">
                     <input value={pullName} onChange={e => setPullName(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') handlePull(); }}
+                      disabled={pulling}
                       placeholder="baixar pelo nome — ex.: qwen3:14b, gpt-oss:20b" />
-                    <button onClick={handlePull} disabled={!pullName.trim() || pulling}>{pulling ? '…' : 'Baixar'}</button>
+                    {pulling
+                      ? <button className="mm-cancel" onClick={handleCancelPull} title="Parar o download">■ Parar</button>
+                      : <button onClick={handlePull} disabled={!pullName.trim()}>Baixar</button>}
                   </div>
                   {pullMsg && <div className="mm-prog">{pullMsg}</div>}
                   <div className="mm-sugg">

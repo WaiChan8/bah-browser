@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ollamaList: (baseUrl?: string) => ipcRenderer.invoke('ollama:list', baseUrl),
   ollamaEnsureRunning: (baseUrl?: string) => ipcRenderer.invoke('ollama:ensure-running', baseUrl),
   ollamaPull: (model: string, baseUrl?: string) => ipcRenderer.invoke('ollama:pull', model, baseUrl),
+  ollamaPullCancel: () => ipcRenderer.invoke('ollama:pull-cancel'),
   ollamaDelete: (model: string, baseUrl?: string) => ipcRenderer.invoke('ollama:delete', model, baseUrl),
   ollamaImportGguf: (name: string, ggufPath: string) => ipcRenderer.invoke('ollama:import-gguf', name, ggufPath),
   onOllamaPullProgress: (cb: (p: { model: string; status?: string; completed?: number; total?: number; percent?: number; done?: boolean; error?: string }) => void) => {

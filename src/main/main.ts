@@ -712,13 +712,24 @@ function setupIPC(): void {
     return { ok: false, notInstalled, error: spawnErr || 'timeout' };
   });
   // Pull com PROGRESSO (stream de linhas JSON) — usa Node http direto (streaming confiável).
+  // Guarda a requisição ativa pra permitir CANCELAR (destruir a conexão → o Ollama
+  // aborta o download). Só um pull por vez na UI, então uma var basta.
+  let activePull: { req: any; canceled: boolean } | null = null;
   ipcMain.handle('ollama:pull', async (e, model: string, baseUrl?: string) => {
     const u = new URL(`${ollamaUrl(baseUrl)}/api/pull`);
     const send = (p: any) => { try { e.sender.send('ollama:pull-progress', { model, ...p }); } catch {} };
     return await new Promise((resolve) => {
+      let settled = false;
+      let req: any = null;
+      const finish = (result: any, progress?: any) => {
+        if (settled) return; settled = true;
+        if (progress) send(progress);
+        if (activePull && activePull.req === req) activePull = null;
+        resolve(result);
+      };
       try {
         const http = require('http');
-        const req = http.request(
+        req = http.request(
           { hostname: u.hostname, port: u.port || 11434, path: u.pathname, method: 'POST', headers: { 'Content-Type': 'application/json' } },
           (res: any) => {
             let buf = '';
@@ -737,14 +748,25 @@ function setupIPC(): void {
                 } catch {}
               }
             });
-            res.on('end', () => { send({ done: true }); resolve({ ok: true }); });
+            res.on('end', () => finish({ ok: true }, { done: true }));
           },
         );
-        req.on('error', (err: any) => { send({ done: true, error: String(err?.message ?? err) }); resolve({ ok: false, error: String(err?.message ?? err) }); });
+        activePull = { req, canceled: false };
+        req.on('error', (err: any) => {
+          if (activePull?.canceled) finish({ ok: false, canceled: true }, { done: true, canceled: true });
+          else finish({ ok: false, error: String(err?.message ?? err) }, { done: true, error: String(err?.message ?? err) });
+        });
+        // destroy() pode emitir só 'close' (sem 'error') — cobre o cancelamento.
+        req.on('close', () => { if (activePull?.canceled) finish({ ok: false, canceled: true }, { done: true, canceled: true }); });
         req.write(JSON.stringify({ model, stream: true }));
         req.end();
-      } catch (e2: any) { send({ done: true, error: String(e2?.message ?? e2) }); resolve({ ok: false, error: String(e2?.message ?? e2) }); }
+      } catch (e2: any) { finish({ ok: false, error: String(e2?.message ?? e2) }, { done: true, error: String(e2?.message ?? e2) }); }
     });
+  });
+  // Cancela o download em andamento (destrói a conexão → Ollama aborta o pull).
+  ipcMain.handle('ollama:pull-cancel', async () => {
+    if (activePull) { activePull.canceled = true; try { activePull.req.destroy(); } catch {} return { ok: true }; }
+    return { ok: false };
   });
   // Importar um .gguf por CAMINHO (modelo fora do catálogo / baixado na mão via IDM).
   // Roda `ollama create <nome> -f <Modelfile>` com `FROM <caminho>`.
