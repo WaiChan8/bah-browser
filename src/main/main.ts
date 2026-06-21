@@ -1424,8 +1424,8 @@ function setupIPC(): void {
     'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be',
     'twitch.tv', 'www.twitch.tv',
   ]);
-  let userAdblockPref = true;        // user toggle (baseline)
-  let actuallyEnabled = true;         // current actual state
+  let userAdblockPref = loadAdblockPref();  // user toggle (baseline), persistido em disco
+  let actuallyEnabled = userAdblockPref;    // current actual state (bate com setupAdblock)
   const persistSession = session.fromPartition('persist:browser');
 
   function applyAdblockState(targetEnabled: boolean) {
@@ -1446,6 +1446,7 @@ function setupIPC(): void {
   ipcMain.handle('adblock:get-state', () => ({ enabled: userAdblockPref, active: actuallyEnabled, bypassedHosts: Array.from(ADBLOCK_BYPASS_HOSTS) }));
   ipcMain.handle('adblock:set-enabled', (_e, on: boolean) => {
     userAdblockPref = !!on;
+    saveAdblockPref(userAdblockPref);
     applyAdblockState(userAdblockPref);
     return { enabled: userAdblockPref };
   });
@@ -1554,12 +1555,21 @@ async function refreshSafeBrowsing(): Promise<void> {
 }
 
 // ═══ Initialize adblock engine (EasyList, EasyPrivacy, cosmetic filters) ═══
+// Preferência do toggle persistida em disco (sobrevive ao restart do app).
+const ADBLOCK_PREF_PATH = path.join(app.getPath('userData'), 'adblock-pref.json');
+function loadAdblockPref(): boolean {
+  try { return JSON.parse(fs.readFileSync(ADBLOCK_PREF_PATH, 'utf-8')).enabled !== false; } catch { return true; }
+}
+function saveAdblockPref(on: boolean): void {
+  try { fs.writeFileSync(ADBLOCK_PREF_PATH, JSON.stringify({ enabled: !!on })); } catch {}
+}
 let blocker: ElectronBlocker | null = null;
 async function setupAdblock(): Promise<void> {
   try {
     blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch as any);
     const persistSession = session.fromPartition('persist:browser');
-    blocker.enableBlockingInSession(persistSession);
+    // Respeita a preferência salva: só liga se o usuário não tiver desligado.
+    if (loadAdblockPref()) blocker.enableBlockingInSession(persistSession);
 
     console.log('[Adblock] Engine ready (EasyList + EasyPrivacy + cosmetic filters)');
   } catch (e) {
