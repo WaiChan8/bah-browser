@@ -79,6 +79,15 @@ body {
   border-radius:0;transition:background 0.15s var(--ease),color 0.15s var(--ease);
 }
 .win-btn svg{width:14px;height:14px;}
+
+/* Botão AI movido pro topo, ao lado dos controles de janela (minimizar).
+   no-drag pra ser clicável na barra que é arrastável; compacto e centralizado. */
+.top-bar .top-bar-ai{
+  -webkit-app-region:no-drag;
+  align-self:center;
+  height:28px;padding:0 11px;margin:0 8px 0 4px;flex:none;
+}
+.top-bar .top-bar-ai svg{width:14px;height:14px;}
 .win-btn:hover{background:rgba(255,255,255,0.09);color:var(--text-primary);}
 .win-btn.close:hover{background:#e81123;color:#fff;}
 
