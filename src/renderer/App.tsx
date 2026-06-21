@@ -66,6 +66,7 @@ declare global {
       downloadVideo?: (url: string, audioOnly?: boolean, count?: number, quality?: 'best' | 'low') => Promise<{ success: boolean; path?: string; paths?: string[]; title?: string; error?: string }>;
       resolveVideo?: (query: string) => Promise<{ ok: boolean; url?: string; id?: string; title?: string; error?: string }>;
       resolveVideos?: (queries: string[]) => Promise<Array<{ query: string; id?: string; title?: string }>>;
+      resolveManyVideos?: (query: string, count: number) => Promise<{ ok: boolean; videos: Array<{ id: string; title: string; url: string }>; error?: string }>;
       searchVideoCuts?: (phrase: string, count?: number) => Promise<{ success: boolean; cuts: Array<{ videoId: string; seconds: number; title?: string }>; source?: string; error?: string }>;
       renderView?: (spec: object) => Promise<{ success: boolean; url?: string; error?: string }>;
       harvestImages?: (urls: string[], theme: string) => Promise<{ success: boolean; saved: number; dir?: string; paths?: string[]; error?: string }>;
@@ -741,6 +742,7 @@ export default function App() {
                     if (last.type === 'open_video_cuts') quickAction = { ...last, phrase: term };
                     else if (last.type === 'download_video') quickAction = { ...last, query: term };
                     else if (last.type === 'open_video') quickAction = { ...last, query: term };
+                    else if (last.type === 'open_videos') quickAction = { ...last, query: term };
                     else if (last.type === 'find_file') quickAction = { ...last, query: term };
                     if (quickAction) onProgress({ kind: 'status', message: `🔗 Continuando o pedido anterior com "${term}"` });
                   }
@@ -1713,6 +1715,35 @@ export default function App() {
                           toolResult = { success: true, info: { count: ids.length } };
                         }
                       }
+                    }
+                  } else if (action.type === 'open_videos') {
+                    // "abre N abas, cada uma com um vídeo/música de X" → resolve N vídeos
+                    // reais (ytsearchN, pulando Shorts) e abre cada um numa aba. 0 IA →
+                    // segundos, em vez de o agente fazer na unha passo a passo.
+                    setAgentVisual('acting');
+                    const vq = (action.query || '').trim();
+                    const want = Math.min(Math.max((action as any).count || 3, 2), 12);
+                    lastQuickActionRef.current = { type: 'open_videos', query: vq, count: want } as any;
+                    onProgress({ kind: 'status', message: `🎬 Procurando ${want} vídeos de "${vq}" (pulando Shorts)…` });
+                    const rmv = await window.electronAPI?.resolveManyVideos?.(vq, want);
+                    const vids = (rmv?.videos || []) as Array<{ url: string; title: string }>;
+                    if (vids.length > 0) {
+                      for (const v of vids) { try { store.addTab(`${v.url}&autoplay=1`); } catch {} }
+                      const doneMsg = `Abri ${vids.length} aba(s) com vídeos de "${vq}": ${vids.map(v => v.title).slice(0, 5).join(' · ')}`;
+                      onProgress({ kind: 'status', message: `✅ ${doneMsg}` });
+                      allResults.push({ action, result: { success: true, info: { count: vids.length } } });
+                      if (actionQueue.length === 0) {
+                        setLastFooterMsg(`✅ ${doneMsg}`);
+                        finishRun('success', doneMsg);
+                        return { thought: doneMsg, results: allResults, done: { type: 'done', reason: doneMsg, success: true } as BrowserAction };
+                      }
+                      toolResult = { success: true, info: { count: vids.length } };
+                    } else {
+                      const su = `https://www.youtube.com/results?search_query=${encodeURIComponent(vq)}`;
+                      await executeBrowserAction(wv, { type: 'navigate', url: su } as BrowserAction);
+                      history += `\nOPEN_VIDEOS: não resolvi vídeos direto (${rmv?.error || '?'}). Abri a busca — abra ${want} vídeos DE VERDADE (NÃO Shorts) em abas.`;
+                      onProgress({ kind: 'status', message: `🔎 Não achei direto; abri a busca do YouTube.` });
+                      toolResult = { success: false, error: `open_videos: ${rmv?.error || 'não resolvi direto'}` };
                     }
                   } else if (action.type === 'open_video_cuts') {
                     // Supercut helper: acha vídeos onde a FRASE É DITA (Filmot →

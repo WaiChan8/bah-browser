@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('media:download-video', url, audioOnly, count, quality),
   resolveVideo: (query: string) => ipcRenderer.invoke('media:resolve-video', query),
   resolveVideos: (queries: string[]) => ipcRenderer.invoke('media:resolve-videos', queries),
+  resolveManyVideos: (query: string, count: number) => ipcRenderer.invoke('media:resolve-many', query, count),
   searchVideoCuts: (phrase: string, count?: number) =>
     ipcRenderer.invoke('videocuts:search', phrase, count),
   renderView: (spec: object) => ipcRenderer.invoke('view:render', spec),

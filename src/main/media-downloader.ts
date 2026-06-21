@@ -261,6 +261,58 @@ export async function resolveTopVideo(query: string): Promise<{ ok: boolean; url
 }
 
 /**
+ * Resolve N vídeos DISTINTOS de UMA busca (ex.: "2pac" → 3 clipes diferentes), pulando
+ * Shorts. Uma chamada yt-dlp (ytsearch com pool maior pra descartar Shorts). Pro
+ * "open_videos": abrir N abas, cada uma com um vídeo real — determinístico, sem IA.
+ */
+export async function resolveTopNVideos(
+  query: string,
+  n: number,
+): Promise<{ ok: boolean; videos: Array<{ id: string; title: string; url: string }>; error?: string }> {
+  const q = (query || '').trim();
+  const count = Math.min(Math.max(n || 1, 1), 12);
+  if (!q) return { ok: false, videos: [], error: 'busca vazia' };
+  let bin: string;
+  try { bin = await ensureYtDlp(); } catch (e: any) { return { ok: false, videos: [], error: `yt-dlp indisponível: ${e?.message ?? e}` }; }
+  const DURATION = 'duration >= 60 & duration <= 2400';   // pula Shorts (<1min); teto 40min
+  const pool = Math.min(count * 3 + 4, 40);               // oversample pra descartar Shorts/inválidos
+  return new Promise((resolve) => {
+    const args = [
+      `ytsearch${pool}:${q}`,
+      '--match-filter', DURATION,
+      '--no-download', '--no-warnings', '--no-color', '--ignore-errors',
+      '--print', '%(id)s\t%(title)s',
+    ];
+    let buf = '';
+    let done = false;
+    const seen = new Set<string>();
+    const videos: Array<{ id: string; title: string; url: string }> = [];
+    const child = spawn(bin, args, { windowsHide: true });
+    const finish = () => {
+      if (done) return; done = true;
+      try { child.kill(); } catch {}
+      resolve({ ok: videos.length > 0, videos, error: videos.length ? undefined : 'nenhum vídeo adequado encontrado' });
+    };
+    child.stdout.on('data', (d) => {
+      buf += d.toString();
+      let nl: number;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+        const m = /^([A-Za-z0-9_-]{6,})\t(.*)$/.exec(line);
+        if (m && !seen.has(m[1])) {
+          seen.add(m[1]);
+          videos.push({ id: m[1], title: m[2], url: `https://www.youtube.com/watch?v=${m[1]}` });
+          if (videos.length >= count) finish();
+        }
+      }
+    });
+    child.on('error', () => finish());
+    child.on('close', () => finish());
+    setTimeout(() => finish(), 25_000);
+  });
+}
+
+/**
  * Resolve VÁRIAS buscas → ids de vídeo (em paralelo, com limite de concorrência).
  * Usado pelo "create_playlist": cada nome de música → 1 vídeo real → monta a playlist.
  */

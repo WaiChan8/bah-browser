@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { AIEngine, AIProvider } from './ai-engine';
 import { PageAgent } from './page-agent';
-import { downloadVideo, resolveTopVideo, resolveTopVideos } from './media-downloader';
+import { downloadVideo, resolveTopVideo, resolveTopVideos, resolveTopNVideos } from './media-downloader';
 import { searchVideoCuts } from './video-cuts';
 import { fetchStockMovers, openDataView, type DataViewSpec } from './data-view';
 import { makeSupercut } from './supercut';
@@ -1303,6 +1303,15 @@ function setupIPC(): void {
       return await resolveTopVideo(query);
     } catch (e: any) {
       return { ok: false, error: String(e?.message ?? e) };
+    }
+  });
+
+  // Resolve N vídeos DISTINTOS de UMA busca (pro "open_videos": N abas, N clipes).
+  ipcMain.handle('media:resolve-many', async (_e, query: string, count: number) => {
+    try {
+      return await resolveTopNVideos(query, count);
+    } catch (e: any) {
+      return { ok: false, videos: [], error: String(e?.message ?? e) };
     }
   });
 

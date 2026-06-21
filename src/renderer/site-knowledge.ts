@@ -223,6 +223,7 @@ export type QuickAction =
   | { type: 'download_video'; query: string; audio_only?: boolean; count?: number; quality?: 'best' | 'low' }
   | { type: 'open_video_cuts'; phrase: string; count?: number }
   | { type: 'open_video'; query: string }
+  | { type: 'open_videos'; query: string; count: number }
   | { type: 'make_supercut'; phrase: string; count?: number }
   | { type: 'stock_movers'; direction: 'gainers' | 'losers'; count?: number }
   | { type: 'compare_prices'; query: string }
@@ -417,6 +418,27 @@ export function detectQuickAction(command: string): QuickAction | null {
       const cm = sp2.match(/\b(\d{1,3})\s+(?:acoes|stocks?|shares?)\b/) || sp2.match(/\b(?:acoes?|stocks?|shares?)\D{0,12}\b(\d{1,3})\b/);
       const count = cm ? Math.min(Math.max(parseInt(cm[1], 10), 5), 100) : 50;
       return { type: 'stock_movers', direction, count };
+    }
+  }
+
+  // ABRIR N ABAS, CADA UMA COM UM VÍDEO/MÚSICA DE X — "abre 3 abas cada uma com uma
+  // música do 2pac", "toca 3 músicas do Pink Floyd", "abre 3 vídeos do X". Resolve N
+  // vídeos reais (ytsearchN, sem Shorts) e abre cada um numa aba tocando. 0 token.
+  // ANTES do open_video (singular) por ser mais específico. Exige palavra de mídia +
+  // contagem >= 2, então não captura "abre 3 abas do google".
+  {
+    const sp = n.replace(/([a-z])(\d)/g, '$1 $2');
+    const isDl = /\b(baix\w*|download|downloading|salv\w*|save|saving)\b/.test(sp);
+    const watchVerb = /\b(abr\w+|mostr\w+|toc\w+|toqu\w+|coloc\w+|coloqu\w+|p[oõ]e\b|bota\w*|reproduz\w+|assist\w+|open\w*|play\w*|show\w*|watch\w*)\b/.test(sp);
+    const mediaWord = /\b(video|videos|clipe|clipes|musica|musicas|cancao|cancoes|song|songs|track|tracks|clip|clips)\b/.test(sp);
+    const cm = sp.match(/\b(\d{1,2}|duas|dois|tres|quatro|cinco|seis|sete|oito|nove|dez|two|three|four|five|six|seven|eight|nine|ten)\s+(?:abas?|guias?|tabs?|musicas?|videos?|cancoes|clipes?|songs?|tracks?|clips?)\b/);
+    const cnt = cm ? (NUM_WORDS[cm[1]] || parseInt(cm[1], 10) || 0) : 0;
+    if (!isDl && watchVerb && mediaWord && cnt >= 2) {
+      const STRIP = new Set(('abre abra abrir mostra mostre mostrar toca tocar toque coloca colocar coloque poe poem bota botar reproduz reproduzir assistir assista navegador aba abas guia guias cada uma com no na do da de dos das o a os as e em uns umas open play show watch tab tabs each one with in on the of a an song songs track tracks video videos clip clips musica musicas cancao cancoes clipe clipes filme').split(' '));
+      const q = stripAgentMeta(command).replace(/([a-z])(\d)/gi, '$1 $2').split(/\s+/)
+        .filter(w => { const nw = normalize(w); return w && !STRIP.has(nw) && !/^\d{1,2}$/.test(nw) && !(nw in NUM_WORDS); })
+        .join(' ').trim();
+      if (q.length >= 2) return { type: 'open_videos', query: q, count: Math.min(cnt, 12) };
     }
   }
 
