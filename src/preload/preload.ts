@@ -9,8 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // AI
   setAIProvider: (provider: string, apiKey: string, baseUrl?: string) =>
     ipcRenderer.invoke('ai:set-provider', provider, apiKey, baseUrl),
-  aiChat: (message: string, pageContent?: string, stateless?: boolean) =>
-    ipcRenderer.invoke('ai:chat', message, pageContent, stateless),
+  aiChat: (message: string, pageContent?: string, stateless?: boolean, local?: boolean) =>
+    ipcRenderer.invoke('ai:chat', message, pageContent, stateless, local),
   aiAction: (command: string, pageContent?: string, screenshot?: string, tier?: 'local' | 'flash' | 'pro') =>
     ipcRenderer.invoke('ai:action', command, pageContent, screenshot, tier),
   setLocalProvider: (provider: string, apiKey: string, baseUrl?: string, modelName?: string) =>

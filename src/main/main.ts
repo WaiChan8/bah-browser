@@ -612,13 +612,21 @@ function setupIPC(): void {
   });
 
   // AI chat — general conversation / page Q&A
-  ipcMain.handle('ai:chat', async (_event, message: string, pageContent?: string, stateless?: boolean) => {
-    if (!aiEngine) return { error: 'AI provider not configured. Open settings to configure.' };
+  ipcMain.handle('ai:chat', async (_event, message: string, pageContent?: string, stateless?: boolean, local?: boolean) => {
+    // Em modo IA Local, chat e pesquisa usam o MODELO LOCAL (offline, sem chave).
+    // Só cai na nuvem quando o modo local está desligado.
+    const engine = (local && localEngine) ? localEngine : aiEngine;
+    if (!engine) return { error: 'IA não configurada. Abra as configurações.' };
     try {
-      const response = await aiEngine.chat(message, pageContent, stateless);
+      const response = await engine.chat(message, pageContent, stateless);
       return { response };
     } catch (err: any) {
-      return { error: err.message ?? String(err) };
+      const m = err?.message ?? String(err);
+      if (local) return { error: `A IA local falhou: ${m}. Confirme que o Ollama está aberto e que um modelo foi baixado e selecionado.` };
+      if (/401|403|api.?key|unauthorized|invalid.*key|\bsk-/i.test(m)) {
+        return { error: 'A nuvem (DeepSeek) precisa de uma chave de API. Cole a chave nas configurações OU mude para 🏠 IA Local (offline, sem chave).' };
+      }
+      return { error: m };
     }
   });
 

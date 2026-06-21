@@ -50,7 +50,7 @@ declare global {
       close: () => void;
       setAIProvider: (provider: string, apiKey: string, baseUrl?: string) => Promise<any>;
       setLocalProvider?: (provider: string, apiKey: string, baseUrl?: string, modelName?: string) => Promise<any>;
-      aiChat: (message: string, pageContent?: string, stateless?: boolean) => Promise<{ response?: string; error?: string }>;
+      aiChat: (message: string, pageContent?: string, stateless?: boolean, local?: boolean) => Promise<{ response?: string; error?: string }>;
       aiAction: (command: string, pageContent?: string, screenshot?: string, tier?: 'local' | 'flash' | 'pro') => Promise<any>;
       onOpenNewTab?: (cb: (url: string) => void) => void;
       realClick?: (wcId: number, x: number, y: number, backendNodeId?: number) => Promise<any>;
@@ -340,7 +340,7 @@ export default function App() {
       if (results.length === 0) return { answer: 'Não encontrei resultados úteis pra essa busca agora. Pode reformular?', sources: [] };
       const snippetsBlock = results.map((x, i) => `[${i + 1}] ${x.title}\n${x.snippet || ''}\n(${x.url})`).join('\n\n');
       const prompt = `Pergunta do usuário: "${q}"\n\nResultados de busca da web (de HOJE):\n${snippetsBlock}\n\nResponda à pergunta de forma DIRETA e útil em português, usando SOMENTE estes resultados. Cite as fontes pelo nome do site entre parênteses (ex.: (Wikipedia)). Seja conciso: no máximo ~6 linhas ou uma lista curta. Se os resultados não responderem com clareza, diga o que dá pra concluir. NÃO escreva nenhuma linha [[ACTION:]].`;
-      const r = await window.electronAPI?.aiChat(prompt, '', true);   // stateless: não polui o histórico
+      const r = await window.electronAPI?.aiChat(prompt, '', true, store.localSettings.enabled);   // stateless: não polui o histórico
       const answer = (r?.response || '').trim() || (r?.error ? `Erro ao resumir: ${r.error}` : 'Não consegui resumir os resultados.');
       return { answer, sources: results.map(x => ({ title: x.title, url: x.url })) };
     } finally {
@@ -1416,7 +1416,7 @@ export default function App() {
                       onProgress({ kind: 'status', message: `🤖 Consultando a IA: "${q.slice(0, 80)}"` });
                       let answered = false;
                       try {
-                        const r = await window.electronAPI?.aiChat?.(q);
+                        const r = await window.electronAPI?.aiChat?.(q, undefined, undefined, store.localSettings.enabled);
                         if (r?.response && r.response.trim()) {
                           history += `\n\nAI ANSWER to "${q}":\n${r.response}\n(Use this to answer the user.)`;
                           onProgress({ kind: 'status', message: `🤖 Respondido (${r.response.length} chars).` });
@@ -2369,7 +2369,7 @@ export default function App() {
             onSendChat={async (msg) => {
               store.addChatMessage('user', msg);
               const pageContent = await getPageContent();
-              const result = await window.electronAPI?.aiChat(msg, pageContent);
+              const result = await window.electronAPI?.aiChat(msg, pageContent, undefined, store.localSettings.enabled);
               const raw = result?.response ?? (result?.error ? `Erro: ${result.error}` : 'Sem resposta.');
               // Caixa unificada: o modo resposta pode propor uma ação numa linha
               // [[ACTION: ...]]. Extraímos a proposta e a removemos do texto exibido —
@@ -2562,7 +2562,7 @@ async function summarizeForTrashDestroyer(
       '',
       article.text.slice(0, 9000),
     ].join('\n');
-    const res = await raceTimeout(window.electronAPI?.aiChat(prompt, '') ?? Promise.resolve(undefined), 14000, undefined);
+    const res = await raceTimeout(window.electronAPI?.aiChat(prompt, '', undefined, store.localSettings.enabled) ?? Promise.resolve(undefined), 14000, undefined);
     const raw = res?.response?.trim();
     if (!raw || res?.error) return fallback;
     const bullets = raw
