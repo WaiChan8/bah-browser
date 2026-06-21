@@ -1,6 +1,6 @@
 {
   "name": "bah-browser",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "description": "AI-powered browser agent — navigate and manipulate the web with natural language",
   "author": {
     "name": "Alex Vilela",
@@ -28,6 +28,7 @@
     "chrome-cookies-secure": "^3.0.2",
     "cross-fetch": "^4.1.0",
     "electron-store": "^8.2.0",
+    "electron-updater": "^6.8.9",
     "openai": "^4.77.0",
     "tesseract.js": "^7.0.0",
     "uuid": "^11.1.0"

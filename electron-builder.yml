@@ -1,5 +1,9 @@
 appId: com.vilelalab.bah
 productName: Bah
+publish:
+  provider: github
+  owner: alexvilelabah
+  repo: bah-browser
 directories:
   output: release
   buildResources: build
@@ -13,6 +17,9 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  # Sem espaços no nome → o GitHub não troca por pontos e o nome bate com o latest.yml
+  # (essencial pro auto-update achar o arquivo).
+  artifactName: ${productName}-Setup-${version}.${ext}
 mac:
   target:
     - dmg

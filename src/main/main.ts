@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, session, Menu, clipboard, webContents, shell, dialog } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import { ElectronBlocker } from '@ghostery/adblocker-electron';
 import fetch from 'cross-fetch';
 import fs from 'fs';
@@ -1810,6 +1811,36 @@ function sweepOldScreenshots(): void {
   } catch {}
 }
 
+// ── Atualização automática (só na versão INSTALADA; nunca em dev/.bat) ─────────
+// Checa as Releases do GitHub, baixa em segundo plano e, quando pronto, oferece
+// reiniciar pra aplicar. Totalmente aditivo: não toca no agente nem no caminho
+// da API/nuvem. Qualquer erro é silencioso (offline, sem release etc.).
+function setupAutoUpdater(): void {
+  if (!app.isPackaged) return;
+  try {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on('update-downloaded', async (info: any) => {
+      try {
+        const r = await dialog.showMessageBox({
+          type: 'info',
+          buttons: ['Reiniciar agora', 'Depois'],
+          defaultId: 0,
+          cancelId: 1,
+          title: 'Atualização disponível',
+          message: `Uma nova versão (${info?.version ?? ''}) foi baixada.`,
+          detail: 'Reinicie para concluir a atualização. Suas configurações e login são mantidos.',
+        });
+        if (r.response === 0) setImmediate(() => autoUpdater.quitAndInstall());
+      } catch { /* silencioso */ }
+    });
+    autoUpdater.on('error', (err: any) => console.warn('[update] erro:', err?.message ?? err));
+    autoUpdater.checkForUpdates().catch(() => { /* offline / sem release */ });
+  } catch (e) {
+    console.warn('[update] setup falhou:', e);
+  }
+}
+
 app.whenReady().then(() => {
   sweepOldScreenshots();
   setupAdblock();
@@ -1865,6 +1896,7 @@ app.whenReady().then(() => {
   createWindow();
   setupIPC();
   startCookieFlushInterval();
+  setupAutoUpdater();
 
   // Default cloud engine (no key yet — user sets in settings)
   aiEngine = new AIEngine('deepseek', '');
