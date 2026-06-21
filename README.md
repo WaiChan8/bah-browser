@@ -35,7 +35,7 @@
 
 - **Navegador completo** com abas, navegação, URL, tema dark
 - **Painel AGENT** lateral: digita um comando → IA decide passo a passo até concluir
-- **Vê a página** (screenshot + accessibility tree) e age usando ferramentas estruturadas
+- **Lê a página** (DOM, elementos interativos numerados e OCR) e age por ferramentas estruturadas — sem depender de "enxergar" a tela
 - **IA**: **DeepSeek** (nuvem) — testado e recomendado, rápido e estável — ou **Ollama** (local/offline) pra rodar a IA na própria máquina
 - **Adblock** completo (EasyList + EasyPrivacy) com bypass automático para sites que quebram (YouTube, Twitch)
 - **Safe Browsing** (URLhaus malicious hosts list, atualiza diariamente)
@@ -49,7 +49,7 @@
 
 | Camada | Tecnologia |
 |---|---|
-| Shell do navegador | **Electron 33** + Chromium |
+| Shell do navegador | **Electron 42** + Chromium |
 | UI | **React 19** + **TypeScript** + Vite |
 | IA (nuvem) | **DeepSeek** — testado e recomendado |
 | IA (local) | **Ollama** |
@@ -126,7 +126,7 @@ A IA tem três jeitos de clicar, e foi instruída a tentar nessa ordem:
    Quando o elemento que a IA quer não está nos top 200 da lista numerada (página gigante tipo YouTube), ela pode chamar por texto. O executor busca todos os elementos com aquele texto, prioriza match exato e penaliza prefixos negativos (não, no, cancelar) pra não clicar no botão errado.
 
 3. **`click_at(x, y)` — coordenada visual (fallback 2)**
-   Último recurso, só quando o elemento é icone-only sem `aria-label` ou está dentro de canvas. A IA olha o screenshot e fala "clica em 234, 567". O navegador usa `document.elementFromPoint()` no ponto exato.
+   Último recurso, só quando o elemento é ícone-only sem `aria-label` ou está dentro de canvas. ⚠️ Só funciona com **provedor de visão** (ex.: Pollinations); com **DeepSeek o screenshot não é enviado ao modelo**, então o agente prioriza os elementos do DOM. Quando há visão, a IA estima a coordenada e o navegador usa `document.elementFromPoint()`.
 
 **Em todos os três casos**, o clique final acontece via `webContents.sendInputEvent` no main process — ou seja, é um evento de mouse **real** do Chromium, não synthetic event. Sites com React/Vue/proteção anti-bot respondem normalmente.
 
@@ -209,7 +209,7 @@ Atalho Windows: clique duplo em `Abrir-Bah.bat`.
 
 |  | **Bah** | Comet | Tandem | Browser-Use |
 |---|---|---|---|---|
-| Código aberto | ✅ | ❌ | ✅ | ✅ |
+| Código-fonte aberto | ✅ | ❌ | ✅ | ✅ |
 | Opção 100% local (Ollama) | ✅ | ❌ | ✅ | ✅ |
 | Roda em casa | ✅ | ❌ | ✅ | ❌ (só lib) |
 | IA na nuvem ou local | ✅ | ❌ (só nuvem) | ✅ | ✅ |
