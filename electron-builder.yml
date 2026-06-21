@@ -1,5 +1,6 @@
 appId: com.vilelalab.bah
 productName: Bah
+afterPack: build/afterPack.js
 publish:
   provider: github
   owner: alexvilelabah
