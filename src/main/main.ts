@@ -561,6 +561,14 @@ function createWindow(): void {
       wc.executeJavaScript(AUTOCORRECT_SCRIPT).catch(() => {});
     });
     attachContextMenu(wc);
+    // Ctrl + roda do mouse = zoom (igual ao Chrome). O Chromium dispara 'zoom-changed'
+    // com a direção quando o mouse está sobre a página; aplicamos no próprio webContents
+    // (limites 30%–300%). Cada aba tem seu webContents → zoom por aba, naturalmente.
+    wc.on('zoom-changed', (_e, dir) => {
+      const cur = wc.getZoomFactor();
+      const next = Math.max(0.3, Math.min(3, Math.round((cur + (dir === 'in' ? 0.1 : -0.1)) * 100) / 100));
+      wc.setZoomFactor(next);
+    });
     // Intercept popup window requests and forward to renderer to open as new tab
     wc.setWindowOpenHandler((details) => {
       const url = details.url;

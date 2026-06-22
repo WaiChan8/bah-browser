@@ -115,8 +115,6 @@ export default function App() {
   // num ref pra switch_tab/close_tab/contexto do modelo lerem o estado atual, não o velho.
   const tabsRef = useRef(store.tabs);
   useEffect(() => { tabsRef.current = store.tabs; }, [store.tabs]);
-  // Zoom por aba (Ctrl +/−/0), estilo Chrome.
-  const zoomRef = useRef<Map<string, number>>(new Map());
   // Site-initiated downloads (will-download no main) — drenados pelo loop do agente
   // para a IA saber que o clique em "baixar" realmente produziu um arquivo.
   const downloadEventsRef = useRef<Array<{ state: string; filename: string; path?: string; bytes?: number; reason?: string }>>([]);
@@ -413,10 +411,11 @@ export default function App() {
       case 'bookmark': { const u = store.activeTab.url; if (favorites.some(f => f.url === u)) removeFavorite(u); else saveFavorite(); break; }
       case 'zoom-in': case 'zoom-out': case 'zoom-reset': {
         const wv = getActiveWebview() as any; if (!wv) break;
-        const id = store.activeTabId;
-        let z = action === 'zoom-reset' ? 1 : (zoomRef.current.get(id) ?? 1) + (action === 'zoom-in' ? 0.1 : -0.1);
+        // Lê o zoom REAL da aba (mesma fonte que o Ctrl+roda usa no main) → teclado e
+        // roda do mouse ficam consistentes, sem pulo.
+        const cur = (typeof wv.getZoomFactor === 'function' ? wv.getZoomFactor() : 1) || 1;
+        let z = action === 'zoom-reset' ? 1 : cur + (action === 'zoom-in' ? 0.1 : -0.1);
         z = Math.max(0.3, Math.min(3, Math.round(z * 100) / 100));
-        zoomRef.current.set(id, z);
         try { wv.setZoomFactor(z); } catch {}
         setLastFooterMsg(t('zoom.level', { pct: String(Math.round(z * 100)) }));
         break;
