@@ -424,6 +424,8 @@ export default function App() {
           onBack={goBack}
           onForward={goForward}
           onReload={reload}
+          isBookmarked={favorites.some(f => f.url === store.activeTab.url)}
+          onToggleBookmark={() => { const u = store.activeTab.url; if (favorites.some(f => f.url === u)) removeFavorite(u); else saveFavorite(); }}
         />
         <div className="menu-wrap">
           <button className="menu-btn" onClick={() => setMenuOpen(o => !o)} title="Menu">
@@ -467,6 +469,24 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {/* Barra de favoritos (estilo Chrome) — aparece quando há favoritos salvos. */}
+      {favorites.length > 0 && (
+        <div className="bookmarks-bar">
+          {favorites.map(f => (
+            <button key={f.url} className="bookmark-chip" onClick={() => navigate(f.url)} title={f.url}>
+              <img
+                className="bm-fav"
+                src={(() => { try { return `${new URL(f.url).origin}/favicon.ico`; } catch { return ''; } })()}
+                alt=""
+                draggable={false}
+                onError={e => { (e.currentTarget.style.visibility = 'hidden'); }}
+              />
+              <span className="bm-title">{(() => { try { return f.title || new URL(f.url).hostname.replace(/^www\./, ''); } catch { return f.title || f.url; } })()}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="main-content">
         <div className="webview-area">

@@ -9,11 +9,14 @@ interface Props {
   onBack: () => void;
   onForward: () => void;
   onReload: () => void;
+  isBookmarked: boolean;
+  onToggleBookmark: () => void;
 }
 
 export default function AddressBar({
   url, isLoading, canGoBack, canGoForward,
   onNavigate, onBack, onForward, onReload,
+  isBookmarked, onToggleBookmark,
 }: Props) {
   const [input, setInput] = useState(url);
 
@@ -54,6 +57,15 @@ export default function AddressBar({
           placeholder="Search or enter URL..."
           spellCheck={false}
         />
+        <button
+          className={`bookmark-star ${isBookmarked ? 'on' : ''}`}
+          onClick={onToggleBookmark}
+          title={isBookmarked ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill={isBookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+          </svg>
+        </button>
       </div>
     </div>
   );
