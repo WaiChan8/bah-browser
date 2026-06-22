@@ -194,6 +194,16 @@ body {
 .url-input::placeholder{color:var(--text-muted);}
 .url-input:focus::placeholder{color:transparent;}   /* some ao focar, igual ao Chrome */
 
+/* 🔒 Indicador de segurança (cadeado https) à esquerda da caixa */
+.url-sec{
+  position:absolute; left:9px; top:50%; transform:translateY(-50%);
+  width:18px; height:18px; display:flex; align-items:center; justify-content:center;
+  pointer-events:none; color:var(--text-muted);
+}
+.url-sec.secure{ color:#5fb87a; }    /* cadeado verde discreto */
+.url-sec.insecure{ color:#e0a050; }  /* aviso âmbar */
+.url-input-wrapper.has-sec .url-input{ padding-left:34px; }
+
 /* ⭐ Estrela de favorito dentro da caixa de URL (estilo Chrome) */
 .url-input-wrapper .url-input{ padding-right:40px; }
 .bookmark-star{

@@ -29,6 +29,9 @@ export default function AddressBar({
     }
   };
 
+  // Indicador de segurança (cadeado) — só pra páginas reais http/https; vazio na nova aba.
+  const sec = /^https:\/\//i.test(url) ? 'secure' : /^http:\/\//i.test(url) ? 'insecure' : '';
+
   return (
     <div className="address-bar">
       <div className="nav-buttons">
@@ -47,7 +50,14 @@ export default function AddressBar({
         </button>
       </div>
 
-      <div className="url-input-wrapper">
+      <div className={`url-input-wrapper${sec ? ' has-sec' : ''}`}>
+        {sec && (
+          <span className={`url-sec ${sec}`} title={sec === 'secure' ? t('addr.secure') : t('addr.insecure')}>
+            {sec === 'secure'
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12.01" y2="8"/><line x1="12" y1="12" x2="12" y2="16"/></svg>}
+          </span>
+        )}
         <input
           type="text"
           className="url-input"
