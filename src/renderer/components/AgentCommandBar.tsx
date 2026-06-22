@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { t, getLang, setLang, LANGS, Lang } from '../i18n';
 import { BrowserAction, formatAction } from '../page-executor';
 import { AISettings, LocalSettings } from '../store';
 import { detectQuickAction, getInitialShortcutAction } from '../site-knowledge';
@@ -477,17 +478,17 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onF
   return (
     <div className="agent-command-bar" data-testid="agent-command-bar">
       <div className="sidebar-header">
-        <h3>Assistente</h3>
+        <h3>{t('assist.title')}</h3>
         <div className="sidebar-actions">
-          <button onClick={() => setShowSettings(!showSettings)} title="Configurações">
+          <button onClick={() => setShowSettings(!showSettings)} title={t('assist.settings')}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
             </svg>
           </button>
-          <button onClick={() => setFeed([])} title="Limpar feed">
+          <button onClick={() => setFeed([])} title={t('assist.clear')}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
           </button>
-          <button onClick={onClose} title="Fechar">
+          <button onClick={onClose} title={t('assist.close')}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
@@ -495,6 +496,12 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onF
 
       {showSettings && (
         <div className="settings-panel">
+          <label>
+            {t('settings.language')}
+            <select value={getLang()} onChange={e => setLang(e.target.value as Lang)}>
+              {LANGS.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+            </select>
+          </label>
           <div className="mode-switch" role="tablist" aria-label="Onde a IA roda">
             <button
               type="button"
@@ -618,12 +625,12 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onF
         {feed.length === 0 && (
           <div className="feed-empty">
             {onGoogleLogin && (
-              <button className="glass-login-btn" onClick={onGoogleLogin} title="Entrar no Google — abre o Chrome/Edge real e importa a sessão automaticamente">
+              <button className="glass-login-btn" onClick={onGoogleLogin} title={t('login.google')}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M21 10h-8v3.6h4.6c-.4 2-2.2 3.4-4.6 3.4a5 5 0 110-10c1.3 0 2.4.5 3.3 1.3l2.6-2.6A8.8 8.8 0 0012 3a9 9 0 100 18c5.2 0 8.7-3.7 8.7-8.9 0-.7-.1-1.4-.3-2.1z"/></svg>
-                <span>Entrar no Google</span>
+                <span>{t('login.google')}</span>
               </button>
             )}
-            <div className="showcase-sub">ou escreva um comando — o agente faz o resto.</div>
+            <div className="showcase-sub">{t('login.subline')}</div>
           </div>
         )}
         {feed.map(item => <FeedRow key={item.id} item={item} onContinue={handleContinueAfterManualHelp} helpActive={!!manualHelp} onConfirmRisky={handleConfirmRisky} confirmActive={!!pendingConfirm} onRunSuggestion={(cmd) => { pendingSuggestionRef.current = null; if (!loading && !chatLoading) runAgent(cmd); }} onOpenUrl={onOpenUrl} />)}

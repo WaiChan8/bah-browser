@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { t } from '../i18n';
 
 export interface SpeedDialItem { url: string; title: string }
 
@@ -32,7 +33,7 @@ export default function SpeedDialOverlay({ items, onNavigate, onAdd, onRemove }:
       <div className="sd-grid">
         {items.map(it => (
           <div key={it.url} className="sd-tile" onClick={() => onNavigate(it.url)} title={it.url}>
-            <button className="sd-del" onClick={e => { e.stopPropagation(); onRemove(it.url); }} title="Remover">✕</button>
+            <button className="sd-del" onClick={e => { e.stopPropagation(); onRemove(it.url); }} title={t('sd.remove')}>✕</button>
             <div className="sd-icon">
               <span className="sd-letter">{initial(it.title)}</span>
               <img src={favicon(it.url)} alt="" draggable={false} onError={e => { (e.currentTarget.style.display = 'none'); }} />
@@ -40,26 +41,26 @@ export default function SpeedDialOverlay({ items, onNavigate, onAdd, onRemove }:
             <span className="sd-label">{it.title}</span>
           </div>
         ))}
-        <div className="sd-tile sd-add" onClick={() => setAdding(true)} title="Adicionar atalho">
+        <div className="sd-tile sd-add" onClick={() => setAdding(true)} title={t('sd.addShortcut')}>
           <div className="sd-icon"><span className="sd-plus">+</span></div>
-          <span className="sd-label">Adicionar</span>
+          <span className="sd-label">{t('sd.add')}</span>
         </div>
       </div>
 
       {adding && (
         <div className="sd-modal" onClick={() => setAdding(false)}>
           <div className="sd-modal-box" onClick={e => e.stopPropagation()}>
-            <div className="sd-modal-title">Novo atalho</div>
-            <input className="sd-modal-input" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome (opcional)" />
+            <div className="sd-modal-title">{t('sd.new')}</div>
+            <input className="sd-modal-input" value={newName} onChange={e => setNewName(e.target.value)} placeholder={t('sd.name')} />
             <input
               className="sd-modal-input" value={newUrl} autoFocus
               onChange={e => setNewUrl(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') submitAdd(); if (e.key === 'Escape') setAdding(false); }}
-              placeholder="URL — ex.: youtube.com"
+              placeholder={t('sd.url')}
             />
             <div className="sd-modal-actions">
-              <button className="sd-cancel" onClick={() => setAdding(false)}>Cancelar</button>
-              <button className="sd-ok" onClick={submitAdd}>Adicionar</button>
+              <button className="sd-cancel" onClick={() => setAdding(false)}>{t('sd.cancel')}</button>
+              <button className="sd-ok" onClick={submitAdd}>{t('sd.ok')}</button>
             </div>
           </div>
         </div>

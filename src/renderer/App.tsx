@@ -5,6 +5,7 @@ import TabBar from './components/TabBar';
 import AddressBar from './components/AddressBar';
 import AgentCommandBar, { AgentProgressEvent } from './components/AgentCommandBar';
 import { classifyRisk } from './risk';
+import { t } from './i18n';
 import WebViewContainer from './components/WebViewContainer';
 import SpeedDialOverlay from './components/SpeedDialOverlay';
 import {
@@ -482,13 +483,13 @@ export default function App() {
           <span>AI</span>
         </button>
         <div className="window-controls">
-          <button onClick={() => window.electronAPI?.minimize()} className="win-btn minimize" title="Minimizar">
+          <button onClick={() => window.electronAPI?.minimize()} className="win-btn minimize" title={t('win.minimize')}>
             <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1"><path d="M2 6h8"/></svg>
           </button>
-          <button onClick={() => window.electronAPI?.maximize()} className="win-btn maximize" title="Maximizar">
+          <button onClick={() => window.electronAPI?.maximize()} className="win-btn maximize" title={t('win.maximize')}>
             <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1"><rect x="2.5" y="2.5" width="7" height="7" rx="0.5"/></svg>
           </button>
-          <button onClick={() => window.electronAPI?.close()} className="win-btn close" title="Fechar">
+          <button onClick={() => window.electronAPI?.close()} className="win-btn close" title={t('win.close')}>
             <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.1"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
           </button>
         </div>
@@ -508,7 +509,7 @@ export default function App() {
           onToggleBookmark={() => { const u = store.activeTab.url; if (favorites.some(f => f.url === u)) removeFavorite(u); else saveFavorite(); }}
         />
         <div className="menu-wrap">
-          <button className="menu-btn" onClick={() => setMenuOpen(o => !o)} title="Menu">
+          <button className="menu-btn" onClick={() => setMenuOpen(o => !o)} title={t('menu.title')}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg>
           </button>
           {menuOpen && (
@@ -517,20 +518,20 @@ export default function App() {
               <div className="menu-panel">
                 <button className="menu-item" onClick={() => toggleAdblock()} title="Bloqueador de anúncios nativo (liga/desliga)">
                   <span className="menu-ic">🛡️</span>
-                  <span className="menu-label">Bloqueador de anúncios</span>
+                  <span className="menu-label">{t('menu.adblock')}</span>
                   <span className={`menu-switch ${adblockOn ? 'on' : ''}`}>{!adblockOn ? 'OFF' : (adblockActive ? 'ON' : 'BYPASS')}</span>
                 </button>
                 <button className="menu-item" onClick={() => { setMenuOpen(false); handleGoogleLogin(); }} title="Faz login no Google pelo Chrome/Edge real e importa a sessao para o Bah">
                   <span className="menu-ic">🔑</span>
-                  <span className="menu-label">Entrar no Google</span>
+                  <span className="menu-label">{t('menu.googleLogin')}</span>
                 </button>
                 <div className="menu-sep" />
                 <div className="menu-section-title">
-                  <span>⭐ Favoritos</span>
-                  <button className="menu-add" onClick={saveFavorite} title="Salvar a página atual">+ Salvar</button>
+                  <span>⭐ {t('menu.favorites')}</span>
+                  <button className="menu-add" onClick={saveFavorite} title={t('menu.save')}>{t('menu.save')}</button>
                 </div>
                 {favorites.length === 0 ? (
-                  <div className="menu-empty">Nenhum favorito ainda. Abra uma página e clique em “+ Salvar”.</div>
+                  <div className="menu-empty">{t('menu.noFavorites')}</div>
                 ) : (
                   <div className="menu-favlist">
                     {favorites.map(f => (
@@ -589,13 +590,13 @@ export default function App() {
                   if (e.key === 'Enter') { e.preventDefault(); runFind(findText, { findNext: true, forward: !e.shiftKey }); }
                   else if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
                 }}
-                placeholder="Buscar na página…"
+                placeholder={t('find.placeholder')}
                 spellCheck={false}
               />
               <span className="find-count">{findText ? `${findCount.active}/${findCount.total}` : ''}</span>
-              <button className="find-btn" onClick={() => runFind(findText, { findNext: true, forward: false })} title="Anterior (Shift+Enter)">↑</button>
-              <button className="find-btn" onClick={() => runFind(findText, { findNext: true, forward: true })} title="Próximo (Enter)">↓</button>
-              <button className="find-btn" onClick={closeFind} title="Fechar (Esc)">✕</button>
+              <button className="find-btn" onClick={() => runFind(findText, { findNext: true, forward: false })} title={t('find.prev')}>↑</button>
+              <button className="find-btn" onClick={() => runFind(findText, { findNext: true, forward: true })} title={t('find.next')}>↓</button>
+              <button className="find-btn" onClick={closeFind} title={t('find.close')}>✕</button>
             </div>
           )}
           {isGoogleHome(store.activeTab.url) && (
