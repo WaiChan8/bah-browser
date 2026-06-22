@@ -253,8 +253,8 @@ body {
   padding-top:13vh; gap:26px; overflow-y:auto;
   background:var(--bg-primary);
 }
-.start-logo{ font-size:64px; font-weight:800; letter-spacing:-1px;
-  background:var(--gradient); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.start-logo{ display:flex; align-items:center; justify-content:center; height:70px; }
+.start-logo img{ height:58px; object-fit:contain; }
 .start-search{
   display:flex; align-items:center; gap:10px;
   width:min(560px,86%); height:50px; padding:0 18px;

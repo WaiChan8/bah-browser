@@ -30,7 +30,9 @@ export default function StartPage({ items, onNavigate, onAdd, onRemove }: Props)
 
   return (
     <div className="start-page">
-      <div className="start-logo"><span>Bah</span></div>
+      <div className="start-logo">
+        <img src="https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png" alt="Google" draggable={false} />
+      </div>
 
       <div className="start-search">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
