@@ -1913,10 +1913,37 @@ app.whenReady().then(() => {
     callback({ responseHeaders: headers });
   });
 
-  // Hidden menu with edit role enables Ctrl+C/V/X/A even on frameless window
+  // Menu oculto (janela sem moldura) — os ACELERADORES funcionam mesmo com uma página
+  // (webview) focada, então é o jeito certo de ter atalhos estilo Chrome. Cada item
+  // dispara um IPC pro renderer, que executa a ação nas abas. editMenu mantém Ctrl+C/V/X/A.
+  const sendSc = (action: string) => { try { mainWindow?.webContents.send('app:shortcut', action); } catch {} };
+  const tabNumberItems: Electron.MenuItemConstructorOptions[] = Array.from({ length: 9 }, (_, i) => ({
+    label: `Aba ${i + 1}`, accelerator: `CmdOrCtrl+${i + 1}`, click: () => sendSc(`tab-${i + 1}`),
+  }));
   const menu = Menu.buildFromTemplate([
     { role: 'editMenu' },
-    { role: 'viewMenu' },
+    {
+      label: 'Navegar',
+      submenu: [
+        { label: 'Nova aba', accelerator: 'CmdOrCtrl+T', click: () => sendSc('new-tab') },
+        { label: 'Fechar aba', accelerator: 'CmdOrCtrl+W', click: () => sendSc('close-tab') },
+        { label: 'Reabrir aba', accelerator: 'CmdOrCtrl+Shift+T', click: () => sendSc('reopen-tab') },
+        { type: 'separator' },
+        { label: 'Focar endereço', accelerator: 'CmdOrCtrl+L', click: () => sendSc('focus-url') },
+        { label: 'Recarregar', accelerator: 'CmdOrCtrl+R', click: () => sendSc('reload') },
+        { label: 'Recarregar (F5)', accelerator: 'F5', click: () => sendSc('reload') },
+        { label: 'Voltar', accelerator: 'Alt+Left', click: () => sendSc('back') },
+        { label: 'Avançar', accelerator: 'Alt+Right', click: () => sendSc('forward') },
+        { label: 'Favoritar', accelerator: 'CmdOrCtrl+D', click: () => sendSc('bookmark') },
+        { type: 'separator' },
+        { label: 'Próxima aba', accelerator: 'Control+Tab', click: () => sendSc('next-tab') },
+        { label: 'Aba anterior', accelerator: 'Control+Shift+Tab', click: () => sendSc('prev-tab') },
+        ...tabNumberItems,
+        { type: 'separator' },
+        { role: 'toggleDevTools' },
+        { role: 'togglefullscreen' },
+      ],
+    },
   ]);
   Menu.setApplicationMenu(menu);
 

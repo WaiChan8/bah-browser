@@ -64,6 +64,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   revealInFolder: (target: string) => ipcRenderer.invoke('shell:reveal', target),
   openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
   googleLogin: () => ipcRenderer.invoke('google:login'),
+  // Atalhos de teclado estilo Chrome (vêm do menu/aceleradores no main).
+  onShortcut: (cb: (action: string) => void) => {
+    const listener = (_e: unknown, action: string) => cb(action);
+    ipcRenderer.on('app:shortcut', listener);
+    return () => ipcRenderer.removeListener('app:shortcut', listener);
+  },
   dismissOverlays: (wcId: number) => ipcRenderer.invoke('overlays:dismiss', wcId),
   makeSupercut: (phrase: string, count?: number) => ipcRenderer.invoke('media:make-supercut', phrase, count),
   // ── Editor de vídeo local (ffmpeg nativo) ──

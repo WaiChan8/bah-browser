@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface Tab {
@@ -65,6 +65,9 @@ export function useTabStore() {
 
   const activeTab = tabs.find(t => t.id === activeTabId) ?? tabs[0];
 
+  // Pilha de URLs de abas fechadas → reabrir com Ctrl+Shift+T (estilo Chrome).
+  const closedTabsRef = useRef<string[]>([]);
+
   const addTab = useCallback((url?: string): string => {
     const tab = createTab(url);
     setTabs(prev => [...prev, tab]);
@@ -83,6 +86,11 @@ export function useTabStore() {
 
   const closeTab = useCallback((id: string) => {
     setTabs(prev => {
+      const closing = prev.find(t => t.id === id);
+      if (closing && !closing.hidden && closing.url && /^https?:\/\//i.test(closing.url)) {
+        closedTabsRef.current.push(closing.url);
+        if (closedTabsRef.current.length > 25) closedTabsRef.current.shift();
+      }
       const next = prev.filter(t => t.id !== id);
       if (next.length === 0) {
         const newTab = createTab();
@@ -102,6 +110,12 @@ export function useTabStore() {
     setTabs(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
   }, []);
 
+  // Reabre a última aba fechada (Ctrl+Shift+T).
+  const reopenClosedTab = useCallback(() => {
+    const url = closedTabsRef.current.pop();
+    if (url) addTab(url);
+  }, [addTab]);
+
   const addChatMessage = useCallback((role: 'user' | 'assistant', content: string) => {
     setChatMessages(prev => [...prev, { id: uuidv4(), role, content, timestamp: Date.now() }]);
   }, []);
@@ -111,7 +125,7 @@ export function useTabStore() {
   return {
     tabs, activeTabId, activeTab, sidebarOpen,
     chatMessages, aiSettings, localSettings,
-    setActiveTabId, addTab, addHiddenTab, closeTab, updateTab,
+    setActiveTabId, addTab, addHiddenTab, closeTab, updateTab, reopenClosedTab,
     setSidebarOpen, addChatMessage, clearChat,
     setAISettings: (s: AISettings) => {
       setAISettings(s);

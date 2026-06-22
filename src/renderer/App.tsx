@@ -72,6 +72,7 @@ declare global {
       harvestImages?: (urls: string[], theme: string) => Promise<{ success: boolean; saved: number; dir?: string; paths?: string[]; error?: string }>;
       revealInFolder?: (target: string) => Promise<{ success: boolean; error?: string }>;
       googleLogin?: () => Promise<{ ok: boolean; copied?: number; browser?: string; error?: string }>;
+      onShortcut?: (cb: (action: string) => void) => (() => void) | void;
       dismissOverlays?: (wcId: number) => Promise<{ dismissed: string }>;
       makeSupercut?: (phrase: string, count?: number) => Promise<{ success: boolean; dir?: string; paths?: string[]; clipCount?: number; clips?: Array<{ title?: string; videoId: string; seconds: number }>; error?: string }>;
       onSupercutProgress?: (cb: (p: { stage: string; message: string; current?: number; total?: number }) => void) => () => void;
@@ -277,6 +278,36 @@ export default function App() {
   const goBack = useCallback(() => { getActiveWebview()?.goBack(); }, [getActiveWebview]);
   const goForward = useCallback(() => { getActiveWebview()?.goForward(); }, [getActiveWebview]);
   const reload = useCallback(() => { getActiveWebview()?.reload(); }, [getActiveWebview]);
+
+  // ── Atalhos de teclado estilo Chrome (vêm do menu/aceleradores no main → funcionam
+  // mesmo com a página focada). Handler num ref atualizado a cada render → registra 1x. ──
+  const shortcutRef = useRef<(action: string) => void>(() => {});
+  shortcutRef.current = (action: string) => {
+    const visible = store.tabs.filter(t => !t.hidden);
+    const curIdx = visible.findIndex(t => t.id === store.activeTabId);
+    const go = (t?: { id: string }) => { if (t) store.setActiveTabId(t.id); };
+    switch (action) {
+      case 'new-tab': store.addTab(); break;
+      case 'close-tab': store.closeTab(store.activeTabId); break;
+      case 'reopen-tab': store.reopenClosedTab(); break;
+      case 'focus-url': { const el = document.querySelector('.url-input') as HTMLInputElement | null; if (el) { el.focus(); el.select(); } break; }
+      case 'reload': reload(); break;
+      case 'back': goBack(); break;
+      case 'forward': goForward(); break;
+      case 'next-tab': if (visible.length) go(visible[(curIdx + 1) % visible.length]); break;
+      case 'prev-tab': if (visible.length) go(visible[(curIdx - 1 + visible.length) % visible.length]); break;
+      case 'bookmark': { const u = store.activeTab.url; if (favorites.some(f => f.url === u)) removeFavorite(u); else saveFavorite(); break; }
+      default:
+        if (action.startsWith('tab-')) {
+          const n = parseInt(action.slice(4), 10);
+          go(n === 9 ? visible[visible.length - 1] : visible[n - 1]);
+        }
+    }
+  };
+  useEffect(() => {
+    const off = window.electronAPI?.onShortcut?.((a: string) => shortcutRef.current(a));
+    return () => { if (typeof off === 'function') off(); };
+  }, []);
 
   const getPageContent = useCallback(async (): Promise<string> => {
     const wv = getActiveWebview();
