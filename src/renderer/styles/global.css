@@ -192,6 +192,7 @@ body {
   background:rgba(255,255,255,0.06);
 }
 .url-input::placeholder{color:var(--text-muted);}
+.url-input:focus::placeholder{color:transparent;}   /* some ao focar, igual ao Chrome */
 
 /* ⭐ Estrela de favorito dentro da caixa de URL (estilo Chrome) */
 .url-input-wrapper .url-input{ padding-right:40px; }
