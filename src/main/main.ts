@@ -421,6 +421,11 @@ async function loginWithSystemBrowser(): Promise<{ ok: boolean; copied?: number;
   }
 
   const profileDir = path.join(app.getPath('userData'), 'google-system-login-profile');
+  // Perfil de login é DESCARTÁVEL: limpa antes de abrir pra cair numa tela de login
+  // FRESCA toda vez. Sem isso, o login anterior fica salvo neste perfil → o Chrome reabre
+  // já logado, o app detecta o cookie SID nos primeiros 2,5s e fecha a janela na hora
+  // ("abre e fecha rapidinho"), sem deixar o usuário logar de novo / trocar de conta.
+  try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch {}
   fs.mkdirSync(profileDir, { recursive: true });
 
   // Abre o navegador real JÁ com a porta de debug ligada, direto na tela de login.
