@@ -1512,6 +1512,10 @@ function setupIPC(): void {
   const ADBLOCK_BYPASS_HOSTS = new Set([
     'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be',
     'twitch.tv', 'www.twitch.tv',
+    // Google: o filtro de privacidade (EasyPrivacy) quebra o fluxo de cookie do login/Gmail
+    // ("Detectamos um problema com as configurações dos seus cookies"). Não bloquear o
+    // Google no próprio Google vale a confiabilidade do login. (evalAdblockForHost casa subdomínio.)
+    'google.com', 'google.com.br', 'accounts.google.com', 'mail.google.com', 'myaccount.google.com',
   ]);
   let userAdblockPref = loadAdblockPref();  // user toggle (baseline), persistido em disco
   let actuallyEnabled = userAdblockPref;    // current actual state (bate com setupAdblock)

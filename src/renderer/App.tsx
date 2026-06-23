@@ -394,6 +394,16 @@ export default function App() {
   const [findText, setFindText] = useState('');
   const [findCount, setFindCount] = useState<{ active: number; total: number }>({ active: 0, total: 0 });
   const findInputRef = useRef<HTMLInputElement>(null);
+  // Aviso de "sessão do Google expirou": liga quando a aba ativa cai na tela de
+  // login/erro do Google (sinal forte de sessão quebrada). Oferece reentrar em 1 clique.
+  const [showGoogleRelogin, setShowGoogleRelogin] = useState(false);
+  useEffect(() => {
+    const u = store.activeTab?.url || '';
+    // No uso normal logado a URL é mail.google.com/…; cair na tela de login do
+    // accounts.google.com dentro do webview embutido = sessão quebrada.
+    const broken = /^https?:\/\/accounts\.google\.com\/(ServiceLogin|signin|v3\/signin|InteractiveLogin)/i.test(u);
+    setShowGoogleRelogin(broken);   // dispensar (✕) fica dispensado até a URL mudar (dep abaixo)
+  }, [store.activeTab?.url]);
   const runFind = useCallback((text: string, opts?: { findNext?: boolean; forward?: boolean }) => {
     const wv = getActiveWebview() as any;
     if (!wv) return;
@@ -779,6 +789,13 @@ export default function App() {
               <button className="find-btn" onClick={() => runFind(findText, { findNext: true, forward: false })} title={t('find.prev')}>↑</button>
               <button className="find-btn" onClick={() => runFind(findText, { findNext: true, forward: true })} title={t('find.next')}>↓</button>
               <button className="find-btn" onClick={closeFind} title={t('find.close')}>✕</button>
+            </div>
+          )}
+          {showGoogleRelogin && (
+            <div className="relogin-bar">
+              <span className="relogin-text">🔑 {t('relogin.title')}</span>
+              <button className="relogin-btn" onClick={() => { setShowGoogleRelogin(false); handleGoogleLogin(); }}>{t('relogin.btn')}</button>
+              <button className="relogin-x" onClick={() => setShowGoogleRelogin(false)} title={t('relogin.dismiss')}>✕</button>
             </div>
           )}
         </div>
