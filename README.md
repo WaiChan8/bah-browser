@@ -28,7 +28,7 @@
 
 ![Bah in action](assets/demo.gif)
 
-▶️ **[Download the full video (2 min)](https://github.com/alexvilelabah/bah-browser/releases/download/v1.0.0/demo.mp4)** — the agent searching and operating the web on its own. *(the GIF above is a preview; GitHub doesn't play embedded video in the README.)*
+▶️ **[Download the full video](https://github.com/alexvilelabah/bah-browser/raw/main/assets/demo.mp4)** — the agent searching and operating the web on its own. *(the GIF above is a preview; GitHub doesn't play embedded video in the README.)*
 
 ## 📥 Download
 
