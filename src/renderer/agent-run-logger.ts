@@ -12,6 +12,12 @@ export interface AgentRunStepLog {
   urlBefore?: string;
   urlAfter?: string;
   titleAfter?: string;
+  /**
+   * O estado da página que o agente VIU antes de escolher a ação (url + elementos
+   * interativos). É o "input" do par (observação → ação) — o dado de treino. Fica
+   * SÓ no dataset em disco; é removido antes de salvar no localStorage (que é leve, só UI).
+   */
+  observation?: unknown;
   action?: string;
   actionType?: string;
   result?: unknown;
@@ -71,6 +77,9 @@ export function finishAgentRun(
   run.finalReason = finalReason;
   run.endedAt = Date.now();
   saveRun(run);
+  // Dataset em disco: a corrida COMPLETA (com observações, sem trim) é anexada a um
+  // JSONL em userData via IPC — é o material de treino futuro. Nunca quebra o loop.
+  try { (window as any).electronAPI?.appendDatasetRun?.(run); } catch {}
 }
 
 export function summarizeAction(action: BrowserAction): { action: string; actionType: string } {
@@ -86,8 +95,14 @@ export function summarizeResult(result: ToolResult | unknown): unknown {
 
 function saveRun(run: AgentRunLog): void {
   try {
-    const runs = loadRuns().filter(r => r.id !== run.id);
-    runs.push(run);
+    // A versão do localStorage é leve (só pra UI de histórico): remove a `observation`
+    // pesada dos passos. O dado completo (com observação) vai só pro dataset em disco.
+    const lean: AgentRunLog = {
+      ...run,
+      steps: run.steps.map(({ observation, ...rest }) => rest),
+    };
+    const runs = loadRuns().filter(r => r.id !== lean.id);
+    runs.push(lean);
     const trimmed = runs.sort((a, b) => b.startedAt - a.startedAt).slice(0, MAX_RUNS);
     localStorage.setItem(RUNS_KEY, JSON.stringify(trimmed));
   } catch {

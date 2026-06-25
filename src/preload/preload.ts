@@ -71,6 +71,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   harvestImages: (urls: string[], theme: string) => ipcRenderer.invoke('images:harvest', urls, theme),
   revealInFolder: (target: string) => ipcRenderer.invoke('shell:reveal', target),
   openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
+  appendDatasetRun: (run: unknown) => ipcRenderer.invoke('dataset:append-run', run),
+  datasetInfo: () => ipcRenderer.invoke('dataset:info'),
   googleLogin: () => ipcRenderer.invoke('google:login'),
   // Atalhos de teclado estilo Chrome (vêm do menu/aceleradores no main).
   onShortcut: (cb: (action: string) => void) => {

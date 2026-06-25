@@ -2684,6 +2684,8 @@ export default function App() {
                   const ignoreSensitiveRecovery = ignoreSensitivePress || openedRegularPage;
                   appendAgentRunStep(runLog, {
                     step: step + 1,
+                    // O "input" do par (observação → ação): o que o agente viu pra escolher.
+                    observation: { url: observation.url, title: observation.title, elements: observation.interactive_elements },
                     urlBefore: observation.url,
                     urlAfter: afterObservation.url,
                     titleAfter: afterObservation.title,

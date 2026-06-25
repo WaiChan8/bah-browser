@@ -1237,6 +1237,32 @@ function setupIPC(): void {
     }
   });
 
+  // ═══ Coletor de dados: persiste cada corrida do agente (com a observação) num JSONL ═══
+  // É o material pra um futuro treino de modelo local (distilação da IA da nuvem). Append
+  // puro, sem cap, só local (fica em userData; nada é enviado pra lugar nenhum).
+  const datasetDir = () => path.join(app.getPath('userData'), 'agent-dataset');
+  const datasetFile = () => path.join(datasetDir(), 'runs.jsonl');
+  ipcMain.handle('dataset:append-run', (_e, run: unknown) => {
+    try {
+      fs.mkdirSync(datasetDir(), { recursive: true });
+      fs.appendFileSync(datasetFile(), JSON.stringify(run) + '\n', 'utf-8');
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: String(e?.message ?? e) };
+    }
+  });
+  ipcMain.handle('dataset:info', () => {
+    try {
+      const file = datasetFile();
+      if (!fs.existsSync(file)) return { exists: false, path: file, dir: datasetDir(), runs: 0 };
+      const content = fs.readFileSync(file, 'utf-8');
+      const runs = content.split('\n').filter(l => l.trim()).length;
+      return { exists: true, path: file, dir: datasetDir(), runs };
+    } catch (e: any) {
+      return { exists: false, error: String(e?.message ?? e) };
+    }
+  });
+
   // Google blocks sign-in inside Electron/embedded browsers. Use a real installed
   // Chrome/Edge profile for the login, then import the Google cookies into Bah.
   ipcMain.handle('google:login', async () => loginWithSystemBrowser());
