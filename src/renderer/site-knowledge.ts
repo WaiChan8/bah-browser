@@ -1,4 +1,5 @@
 import type { ObservedState } from './page-executor';
+import { googleLocaleParams } from './i18n';
 
 export interface SiteShortcut {
   id: string;
@@ -70,8 +71,8 @@ export const SITE_SHORTCUTS: SiteShortcut[] = [
   {
     id: 'google',
     names: ['google'],
-    url: 'https://www.google.com.br/webhp?hl=pt-BR&gl=BR&pws=0&gws_rd=cr',
-    searchUrl: 'https://www.google.com.br/search?hl=pt-BR&gl=BR&pws=0&q={query}',
+    url: 'https://www.google.com/webhp?pws=0&gws_rd=cr',
+    searchUrl: 'https://www.google.com/search?pws=0&q={query}',
     notes: ['Use Google for broad web search. The query field is usually name=q. Press Enter after filling it.'],
   },
   {
@@ -194,7 +195,7 @@ export function getInitialShortcutAction(command: string): { action: { type: 'na
   const query = extractSearchQuery(command, site);
   if (site.id === 'google' && query && wantsGoogleImages(command)) {
     return {
-      action: { type: 'navigate', url: `https://www.google.com.br/search?hl=pt-BR&gl=BR&pws=0&tbm=isch&q=${encodeURIComponent(query)}` },
+      action: { type: 'navigate', url: `https://www.google.com/search?${googleLocaleParams()}&pws=0&tbm=isch&q=${encodeURIComponent(query)}` },
       reason: `fast path: google images search for "${query}"`,
     };
   }

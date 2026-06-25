@@ -281,7 +281,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
     setChatLoading(true);
     stickToBottomRef.current = true;
     push({ kind: 'chat-user', text: msg });
-    push({ kind: 'event', event: { kind: 'status', message: '🔎 pesquisando na web…' } });
+    push({ kind: 'event', event: { kind: 'status', message: t('feed.searchingWeb') } });
     setInput('');
     try {
       const { answer, sources } = await onResearch(msg);

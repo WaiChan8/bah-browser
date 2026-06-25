@@ -50,6 +50,10 @@ const dict: Record<Lang, Record<string, string>> = {
     'assist.close': 'Close',
     'settings.save': 'Save',
     'settings.language': 'Interface language',
+    'feed.searchingWeb': '🔎 searching the web…',
+    'feed.readingCaption': '📝 Reading the video captions…',
+    'feed.captionLoaded': '✅ Video captions loaded.',
+    'feed.noCaption': 'ℹ️ This video has no captions — answering from the title/description.',
     'login.google': 'Sign in to Google',
     'login.subline': '🛡️ Built-in ad blocker. Or type a command — the agent does the rest.',
     'onboard.title': 'Set up the AI to get started',
@@ -175,6 +179,10 @@ const dict: Record<Lang, Record<string, string>> = {
     'assist.close': 'Fechar',
     'settings.save': 'Salvar',
     'settings.language': 'Idioma da interface',
+    'feed.searchingWeb': '🔎 pesquisando na web…',
+    'feed.readingCaption': '📝 Lendo a legenda do vídeo…',
+    'feed.captionLoaded': '✅ Legenda do vídeo carregada.',
+    'feed.noCaption': 'ℹ️ Esse vídeo não tem legenda — respondo pelo título/descrição.',
     'login.google': 'Entrar no Google',
     'login.subline': '🛡️ Adblock nativo. Ou escreva um comando — o agente faz o resto.',
     'onboard.title': 'Configure a IA pra começar',
@@ -300,6 +308,10 @@ const dict: Record<Lang, Record<string, string>> = {
     'assist.close': 'Cerrar',
     'settings.save': 'Guardar',
     'settings.language': 'Idioma de la interfaz',
+    'feed.searchingWeb': '🔎 buscando en la web…',
+    'feed.readingCaption': '📝 Leyendo los subtítulos del video…',
+    'feed.captionLoaded': '✅ Subtítulos del video cargados.',
+    'feed.noCaption': 'ℹ️ Este video no tiene subtítulos — respondo por el título/descripción.',
     'login.google': 'Iniciar sesión en Google',
     'login.subline': '🛡️ Adblock nativo. O escribe un comando — el agente hace el resto.',
     'onboard.title': 'Configura la IA para empezar',
@@ -422,6 +434,22 @@ export function setLang(l: Lang): void {
   try { localStorage.setItem('uiLang', l); } catch {}
   langListeners.forEach(fn => { try { fn(); } catch {} });
 }
+
+// ── Locale de BUSCA pelo idioma da UI ──────────────────────────────────────
+// Antes, TODA busca do agente (Pesquisa Rápida, notícias, compras, barra) estava
+// cravada em pt-BR&gl=BR → trazia páginas em português pra quem usa em inglês/
+// espanhol. Estes helpers derivam o locale do idioma ATUAL, em tempo de chamada.
+const SEARCH_LOCALES: Record<Lang, { google: string; bing: string; name: string }> = {
+  en: { google: 'hl=en', bing: 'en', name: 'English' },
+  pt: { google: 'hl=pt-BR&gl=BR', bing: 'pt-BR', name: 'Brazilian Portuguese' },
+  es: { google: 'hl=es', bing: 'es', name: 'Spanish' },
+};
+/** Parâmetros de locale do Google (hl/gl) pelo idioma da UI — ex.: "hl=en". */
+export function googleLocaleParams(): string { return SEARCH_LOCALES[currentLang].google; }
+/** Locale do Bing (setlang) pelo idioma da UI. */
+export function bingLocale(): string { return SEARCH_LOCALES[currentLang].bing; }
+/** Nome do idioma da UI em inglês ("English"/"Brazilian Portuguese"/"Spanish") — pra instruir o modelo a responder no idioma certo. */
+export function uiLangName(): string { return SEARCH_LOCALES[currentLang].name; }
 
 // Tradução. Cai pro inglês se faltar a chave no idioma; senão devolve a própria chave.
 export function t(key: string, vars?: Record<string, string | number>): string {

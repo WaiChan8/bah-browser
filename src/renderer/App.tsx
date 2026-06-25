@@ -5,7 +5,7 @@ import TabBar from './components/TabBar';
 import AddressBar from './components/AddressBar';
 import AgentCommandBar, { AgentProgressEvent } from './components/AgentCommandBar';
 import { classifyRisk, riskForAction, RiskInfo } from './risk';
-import { t, onLangChange, getLang } from './i18n';
+import { t, onLangChange, getLang, googleLocaleParams, bingLocale, uiLangName } from './i18n';
 import WebViewContainer from './components/WebViewContainer';
 import {
   BrowserAction,
@@ -378,7 +378,7 @@ export default function App() {
     if (!/^https?:\/\//i.test(url) && !/^file:/i.test(url)) {
       finalUrl = url.includes('.') && !url.includes(' ')
         ? `https://${url}`
-        : `https://www.google.com.br/search?hl=pt-BR&gl=BR&pws=0&q=${encodeURIComponent(url)}`;
+        : `https://www.google.com/search?${googleLocaleParams()}&pws=0&q=${encodeURIComponent(url)}`;
     }
     store.updateTab(store.activeTabId, { isLoading: true });
     getActiveWebview()?.loadURL(finalUrl).catch(() => {});
@@ -546,7 +546,7 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
     if (!q) return { answer: 'Pergunta vazia.', sources: [] };
     // Aba OCULTA: carrega e raspa "por baixo dos panos" — nunca aparece na barra de
     // abas nem rouba o foco do usuário (ele continua exatamente onde estava).
-    const bgId = store.addHiddenTab(`https://www.google.com/search?q=${encodeURIComponent(q)}&hl=pt-BR&gl=BR`);
+    const bgId = store.addHiddenTab(`https://www.google.com/search?q=${encodeURIComponent(q)}&${googleLocaleParams()}`);
     const scrape = async (wv: Electron.WebviewTag) => {
       await waitForWebviewSettled(wv, '');
       await waitForSettle(wv, { maxMs: 4500, minMs: 300 });
@@ -561,12 +561,12 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
       if (!bgWv) return { answer: 'Não consegui abrir a busca agora.', sources: [] };
       let results = await scrape(bgWv);
       if (results.length < 2) {   // Google não rendeu → tenta Bing na mesma aba de fundo
-        try { await bgWv.loadURL(`https://www.bing.com/search?q=${encodeURIComponent(q)}&setlang=pt-BR`); } catch {}
+        try { await bgWv.loadURL(`https://www.bing.com/search?q=${encodeURIComponent(q)}&setlang=${bingLocale()}`); } catch {}
         results = await scrape(bgWv);
       }
       if (results.length === 0) return { answer: 'Não encontrei resultados úteis pra essa busca agora. Pode reformular?', sources: [] };
       const snippetsBlock = results.map((x, i) => `[${i + 1}] ${x.title}\n${x.snippet || ''}\n(${x.url})`).join('\n\n');
-      const prompt = `Pergunta do usuário: "${q}"\n\nResultados de busca da web (de HOJE):\n${snippetsBlock}\n\nResponda à pergunta de forma DIRETA e útil em português, usando SOMENTE estes resultados. Cite as fontes pelo nome do site entre parênteses (ex.: (Wikipedia)). Seja conciso: no máximo ~6 linhas ou uma lista curta. Se os resultados não responderem com clareza, diga o que dá pra concluir. NÃO escreva nenhuma linha [[ACTION:]].`;
+      const prompt = `Pergunta do usuário: "${q}"\n\nResultados de busca da web (de HOJE):\n${snippetsBlock}\n\nResponda à pergunta de forma DIRETA e útil em ${uiLangName()}, usando SOMENTE estes resultados. Cite as fontes pelo nome do site entre parênteses (ex.: (Wikipedia)). Seja conciso: no máximo ~6 linhas ou uma lista curta. Se os resultados não responderem com clareza, diga o que dá pra concluir. NÃO escreva nenhuma linha [[ACTION:]].`;
       const r = await window.electronAPI?.aiChat(prompt, '', true, store.localSettings.enabled);   // stateless: não polui o histórico
       const answer = (r?.response || '').trim() || (r?.error ? `Erro ao resumir: ${r.error}` : 'Não consegui resumir os resultados.');
       return { answer, sources: results.map(x => ({ title: x.title, url: x.url })) };
@@ -582,7 +582,7 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
   // O tópico (contextual) e o cache ficam no AgentCommandBar.
   const fetchNewsHeadlines = useCallback(async (query: string): Promise<string[]> => {
     const q = (query || 'inteligência artificial').trim();
-    const bgId = store.addHiddenTab(`https://www.google.com/search?q=${encodeURIComponent(q)}&udm=12&hl=pt-BR&gl=BR`);
+    const bgId = store.addHiddenTab(`https://www.google.com/search?q=${encodeURIComponent(q)}&udm=12&${googleLocaleParams()}`);
     try {
       let waited = 0;
       let bgWv = webviewRefs.current.get(bgId) as Electron.WebviewTag | undefined;
@@ -1850,7 +1850,7 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                     const ft = (action.filetype || 'pdf').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'pdf';
                     const gq = `${action.query} filetype:${ft}`;
                     onProgress({ kind: 'status', message: `📁 Procurando arquivo (${ft.toUpperCase()}): "${action.query}"` });
-                    try { await wv.loadURL(`https://www.google.com/search?hl=pt-BR&gl=BR&pws=0&q=${encodeURIComponent(gq)}`); } catch {}
+                    try { await wv.loadURL(`https://www.google.com/search?${googleLocaleParams()}&pws=0&q=${encodeURIComponent(gq)}`); } catch {}
                     await waitForWebviewSettled(wv, '');
                     await new Promise(r => setTimeout(r, 900));
                     const links = await withTimeout<string[] | null>(wv.executeJavaScript(`(function(ft){
@@ -2233,7 +2233,7 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                     setAgentVisual('acting');
                     const q = action.query;
                     onProgress({ kind: 'status', message: `🛒 Comparando preços de "${q}" — Google Shopping (Mercado Livre, Amazon, Magalu…)…` });
-                    const shopUrl = `https://www.google.com/search?q=${encodeURIComponent(q)}&udm=28&hl=pt-BR&gl=BR`;
+                    const shopUrl = `https://www.google.com/search?q=${encodeURIComponent(q)}&udm=28&${googleLocaleParams()}`;
                     const beforeUrl = wv.getURL();
                     await executeBrowserAction(wv, { type: 'navigate', url: shopUrl } as BrowserAction);
                     await waitForWebviewSettled(wv, beforeUrl);
@@ -2282,7 +2282,7 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                     setAgentVisual('acting');
                     const q = action.query;
                     onProgress({ kind: 'status', message: `📰 Buscando notícias de "${q}" no Google…` });
-                    const newsUrl = `https://www.google.com/search?q=${encodeURIComponent(q)}&udm=12&hl=pt-BR&gl=BR`;
+                    const newsUrl = `https://www.google.com/search?q=${encodeURIComponent(q)}&udm=12&${googleLocaleParams()}`;
                     const beforeUrl = wv.getURL();
                     await executeBrowserAction(wv, { type: 'navigate', url: newsUrl } as BrowserAction);
                     await waitForWebviewSettled(wv, beforeUrl);
@@ -2833,11 +2833,11 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
               if (vid && window.electronAPI?.getTranscript) {
                 let tr = transcriptCacheRef.current.get(vid);
                 if (tr === undefined) {
-                  setLastFooterMsg('📝 Lendo a legenda do vídeo…');
+                  setLastFooterMsg(t('feed.readingCaption'));
                   const r = await window.electronAPI.getTranscript(store.activeTab.url).catch(() => null);
                   tr = (r && r.ok && r.text) ? r.text : '';
                   transcriptCacheRef.current.set(vid, tr);
-                  setLastFooterMsg(tr ? '✅ Legenda do vídeo carregada.' : 'ℹ️ Esse vídeo não tem legenda — respondo pelo título/descrição.');
+                  setLastFooterMsg(tr ? t('feed.captionLoaded') : t('feed.noCaption'));
                 }
                 if (tr) pageContent += `\n\n[TRANSCRIÇÃO/LEGENDA DO VÍDEO ATUAL — use isto pra responder sobre o que é DITO no vídeo]\n${tr}`;
               }
@@ -3080,7 +3080,7 @@ async function summarizeForTrashDestroyer(
   const fallback = fallbackThreeBullets(article.text);
   try {
     const prompt = [
-      'Resuma a pagina abaixo em exatamente 3 topicos curtos, em portugues.',
+      `Resuma a pagina abaixo em exatamente 3 topicos curtos, em ${uiLangName()}.`,
       'Cada topico deve ter no maximo 140 caracteres.',
       'Nao use numeracao; retorne apenas uma linha por topico.',
       '',
