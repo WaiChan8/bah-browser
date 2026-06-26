@@ -23,6 +23,7 @@ export interface AISettings {
   provider: 'anthropic' | 'openai' | 'deepseek' | 'mistral' | 'nvidia' | 'pollinations' | 'ollama';
   apiKey: string;
   baseUrl: string;
+  apiKeys?: Record<string, string>;   // chave POR provedor — a do DeepSeek não vaza pro campo do Pollinations
 }
 
 export interface LocalSettings {

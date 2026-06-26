@@ -562,7 +562,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
                 {t('set.provider')} {settings.provider === 'pollinations' && <span className="free-badge">{t('set.free')}</span>}
                 <select
                   value={settings.provider === 'mistral' ? 'mistral' : settings.provider === 'nvidia' ? 'nvidia' : settings.provider === 'pollinations' ? 'pollinations' : 'deepseek'}
-                  onChange={e => setSettings({ ...settings, provider: e.target.value as AISettings['provider'], baseUrl: '', apiKey: '' })}
+                  onChange={e => { const next = e.target.value as AISettings['provider']; setSettings(s => { const keys = { ...(s.apiKeys || {}), [s.provider]: s.apiKey }; return { ...s, provider: next, baseUrl: '', apiKey: keys[next] || '', apiKeys: keys }; }); }}
                 >
                   <option value="pollinations">Pollinations ({t('set.free')})</option>
                   <option value="deepseek">DeepSeek</option>
