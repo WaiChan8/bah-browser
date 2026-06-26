@@ -62,7 +62,7 @@ export function useTabStore() {
       const saved = localStorage.getItem('aiSettings');
       if (saved) return JSON.parse(saved);
     } catch {}
-    return { provider: 'deepseek', apiKey: '', baseUrl: '' };
+    return { provider: 'pollinations', apiKey: '', baseUrl: '' };
   });
 
   const [localSettings, setLocalSettingsState] = useState<LocalSettings>(() => {
