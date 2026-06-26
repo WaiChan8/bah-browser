@@ -235,6 +235,7 @@ export type QuickAction =
   | { type: 'compare_prices'; query: string }
   | { type: 'google_news'; query: string }
   | { type: 'harvest_images'; query: string; count?: number; min_width?: number }
+  | { type: 'generate_image'; prompt: string; count?: number }
   | { type: 'find_file'; query: string; filetype: string };
 
 const NUM_WORDS: Record<string, number> = {
@@ -316,6 +317,26 @@ export function detectQuickAction(command: string): QuickAction | null {
       if (phrase.length >= 2 && phrase.length <= 80) {
         return { type: 'make_supercut', phrase, count: Math.min(Math.max(cnt, 1), 15) };
       }
+    }
+  }
+
+  // GERAR IMAGEM (texto->imagem) — "gere uma imagem de X", "crie/desenhe uma imagem de Y".
+  // Pollinations grátis (sem chave). Diferente de BAIXAR imagem (colheita). 0 token.
+  {
+    const sp = n.replace(/([a-z])(\d)/g, '$1 $2');
+    const isGen = /\b(ger[ae]\w*|cri[ae]\w*|desenh\w*|imagin\w*|generate|create|draw|imagine|make)\b/.test(sp)
+      && /\b(imagem|imagens|figura|figuras|desenho|arte|wallpapers?|image|images?|picture|pictures?|drawing|art)\b/.test(sp)
+      && !/\b(baix\w*|download|downloading|salv\w*|save|saving|pega\w*)\b/.test(sp);
+    if (isGen) {
+      const cm = sp.match(/\b(\d{1,2})\s+(?:imagens|imagem|figuras|images?|pictures?)\b/);
+      const count = cm ? Math.min(Math.max(parseInt(cm[1], 10), 1), 4) : 1;
+      const STRIP = new Set(('gere gera gerar crie cria criar desenhe desenha desenhar faca faça facam imagine imagina ' +
+        'uma um de do da dos das uns umas imagem imagens figura figuras desenho arte wallpaper wallpapers foto fotos por favor me pra ' +
+        'generate create draw make imagine an a the of image images picture pictures drawing art please').split(' '));
+      const prompt = stripAgentMeta(command).replace(/([a-z])(\d)/gi, '$1 $2').split(/\s+/)
+        .filter(w => { const nw = normalize(w); return w && !STRIP.has(nw) && !/^\d{1,2}$/.test(nw); })
+        .join(' ').trim();
+      if (prompt.length >= 2) return { type: 'generate_image', prompt, count };
     }
   }
 

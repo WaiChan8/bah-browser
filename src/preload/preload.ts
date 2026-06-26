@@ -70,6 +70,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTranscript: (url: string) => ipcRenderer.invoke('media:transcript', url),
   renderView: (spec: object) => ipcRenderer.invoke('view:render', spec),
   harvestImages: (urls: string[], theme: string) => ipcRenderer.invoke('images:harvest', urls, theme),
+  generateImage: (prompt: string, count?: number) => ipcRenderer.invoke('image:generate', prompt, count),
   revealInFolder: (target: string) => ipcRenderer.invoke('shell:reveal', target),
   openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
   appendDatasetRun: (run: unknown) => ipcRenderer.invoke('dataset:append-run', run),

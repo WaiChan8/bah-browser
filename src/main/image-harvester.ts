@@ -150,3 +150,71 @@ export async function harvestDownload(
   paths.sort();
   return { success: paths.length > 0, saved: paths.length, dir, paths };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GERAÇÃO de imagem (texto→imagem) via Pollinations — grátis, SEM chave. Config
+// espelhada do SuiteOnline (comprovada): width/height/seed/nologo, timeout 30s,
+// modelo padrão. Aqui é no processo principal → SEM CORS, então sem o proxy PHP.
+// Salva em Downloads/<prompt>/ e devolve os caminhos (miniaturas no feed).
+// ─────────────────────────────────────────────────────────────────────────────
+export async function generateImages(
+  prompt: string,
+  count = 1,
+  onProgress?: (saved: number, total: number) => void,
+): Promise<HarvestResult> {
+  const clean = (prompt || '').trim();
+  if (clean.length < 2) return { success: false, saved: 0, error: 'Empty image prompt.' };
+  const n = Math.min(Math.max(count || 1, 1), 4);
+  const dir = path.join(app.getPath('downloads'), slugify(clean));
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (e: any) {
+    return { success: false, saved: 0, error: `Could not create the folder: ${e?.message ?? e}` };
+  }
+  const enc = encodeURIComponent(clean.slice(0, 300));
+  const pad = (x: number) => String(x).padStart(3, '0');
+  const paths: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const seed = Math.floor(Math.random() * 100000) + i;
+    const url = `https://image.pollinations.ai/prompt/${enc}?width=1024&height=1024&seed=${seed}&nologo=true`;
+    const out = await genOne(url, path.join(dir, `img-${pad(i + 1)}`));
+    if (out) { paths.push(out); onProgress?.(paths.length, n); }
+  }
+  paths.sort();
+  return paths.length > 0
+    ? { success: true, saved: paths.length, dir, paths }
+    : { success: false, saved: 0, error: 'Pollinations did not return an image (try again).' };
+}
+
+// Baixa UMA imagem gerada: timeout 30s (geração pode demorar), segue 1 redirect,
+// resolve a extensão pelo content-type. Sem BLOCKED_EXT (a URL é o prompt, confiável).
+function genOne(url: string, basePath: string, redirects = 0): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (redirects > 3) return resolve(null);
+    const req = https.get(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*' },
+      timeout: 30000,
+    }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        const next = res.headers.location.startsWith('http') ? res.headers.location : new URL(res.headers.location, url).href;
+        return resolve(genOne(next, basePath, redirects + 1));
+      }
+      if (res.statusCode !== 200) { res.resume(); return resolve(null); }
+      const ct = String(res.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+      if (ct && !ct.startsWith('image/')) { res.resume(); return resolve(null); }
+      const ext = IMG_EXT[ct] || 'jpg';
+      const dest = `${basePath}.${ext}`;
+      const tmp = `${dest}.part`;
+      const file = fs.createWriteStream(tmp);
+      let bytes = 0, aborted = false;
+      const cleanup = () => { try { fs.unlinkSync(tmp); } catch {} };
+      res.on('data', (c) => { bytes += c.length; if (bytes > MAX_BYTES) { aborted = true; req.destroy(); } });
+      pipeline(res, file, (err) => {
+        if (err || aborted) { cleanup(); return resolve(null); }
+        if (bytes < 2000) { cleanup(); return resolve(null); }
+        try { fs.renameSync(tmp, dest); resolve(dest); } catch { cleanup(); resolve(null); }
+      });
+    });
+    req.on('timeout', () => req.destroy());
+    req.on('error', () => resolve(null));
+  });
+}

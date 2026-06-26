@@ -11,7 +11,7 @@ import { searchVideoCuts } from './video-cuts';
 import { fetchTranscript } from './transcript';
 import { fetchStockMovers, openDataView, type DataViewSpec } from './data-view';
 import { makeSupercut } from './supercut';
-import { harvestDownload } from './image-harvester';
+import { harvestDownload, generateImages } from './image-harvester';
 import { cortarTrecho, removerSilencio, extrairAudio } from './video-editor';
 import { enqueueJob } from './job-queue';
 import { isHttpUrl, isHttpOrSearch, clampCount, isInsideAllowedRoot, isExistingFile } from './validate';
@@ -1313,6 +1313,17 @@ function setupIPC(): void {
       // só URLs http(s) válidas (o harvester ainda aplica seu próprio teto MAX_URLS)
       const safe = (Array.isArray(urls) ? urls : []).filter(isHttpUrl);
       return await harvestDownload(safe, String(theme || 'imagens'), (saved, total) => {
+        mainWindow?.webContents.send('agent:harvest-progress', { saved, total });
+      });
+    } catch (e: any) {
+      return { success: false, saved: 0, error: String(e?.message ?? e) };
+    }
+  });
+
+  // ═══ Geração de imagem (texto→imagem) via Pollinations — grátis, sem chave ═══
+  ipcMain.handle('image:generate', async (_e, prompt: string, count?: number) => {
+    try {
+      return await generateImages(String(prompt || ''), Number(count) || 1, (saved, total) => {
         mainWindow?.webContents.send('agent:harvest-progress', { saved, total });
       });
     } catch (e: any) {

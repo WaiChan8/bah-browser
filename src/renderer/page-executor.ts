@@ -5,6 +5,7 @@ export type BrowserAction =
   | { type: 'extract_images'; min_width?: number }
   | { type: 'search_images'; query: string; min_width?: number; count?: number }
   | { type: 'harvest_images'; query: string; count?: number; min_width?: number }
+  | { type: 'generate_image'; prompt: string; count?: number }
   | { type: 'download'; url: string; filename?: string }
   | { type: 'download_video'; url?: string; query?: string; audio_only?: boolean; count?: number; quality?: 'best' | 'low' }
   | { type: 'open_video_cuts'; phrase: string; count?: number }
@@ -90,6 +91,7 @@ export function formatAction(action: BrowserAction): string {
     case 'stock_movers': return `stock_movers(${action.direction === 'losers' ? 'biggest losers' : 'biggest gainers'}${action.count ? `, ${action.count}` : ''})`;
     case 'compare_prices': return `compare_prices("${shorten(action.query, 50)}")`;
     case 'google_news': return `google_news("${shorten(action.query, 50)}")`;
+    case 'generate_image': return `generate_image("${shorten(action.prompt, 50)}"${action.count && action.count > 1 ? `, ${action.count}` : ''})`;
     case 'ask_ai': return `ask_ai("${shorten(action.question, 80)}")`;
     case 'find_file': return `find_file("${shorten(action.query, 50)}", ${action.filetype || 'pdf'})`;
     case 'read_aloud': return `read_aloud(${action.text ? `"${shorten(action.text, 40)}"` : 'current page'})`;

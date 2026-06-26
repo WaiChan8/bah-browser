@@ -80,6 +80,7 @@ declare global {
       searchVideoCuts?: (phrase: string, count?: number) => Promise<{ success: boolean; cuts: Array<{ videoId: string; seconds: number; title?: string }>; source?: string; error?: string }>;
       renderView?: (spec: object) => Promise<{ success: boolean; url?: string; error?: string }>;
       harvestImages?: (urls: string[], theme: string) => Promise<{ success: boolean; saved: number; dir?: string; paths?: string[]; error?: string }>;
+      generateImage?: (prompt: string, count?: number) => Promise<{ success: boolean; saved: number; dir?: string; paths?: string[]; error?: string }>;
       revealInFolder?: (target: string) => Promise<{ success: boolean; error?: string }>;
       googleLogin?: () => Promise<{ ok: boolean; copied?: number; browser?: string; error?: string }>;
       onShortcut?: (cb: (action: string) => void) => (() => void) | void;
@@ -1542,7 +1543,7 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                   const actionHash = formatAction(action);
                   // download/download_video ficam FORA: baixar de novo é loop de verdade.
                   const internalForDedupe = action.type === 'plan' || action.type === 'store'
-                    || action.type === 'extract_text' || action.type === 'extract_images' || action.type === 'search_images' || action.type === 'harvest_images' || action.type === 'find_file'
+                    || action.type === 'extract_text' || action.type === 'extract_images' || action.type === 'search_images' || action.type === 'harvest_images' || action.type === 'generate_image' || action.type === 'find_file'
                     || action.type === 'ask_ai' || action.type === 'read_aloud' || action.type === 'wait'
                     || action.type === 'done' || action.type === 'report';
                   const priorRepeats = recentActionHashes.slice(-3).filter(h => h === actionHash).length;
@@ -2380,6 +2381,33 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                     } else {
                       toolResult = { success: false, error: failMsg };
                     }
+                  } else if (action.type === 'generate_image') {
+                    // GERAR IMAGEM (texto→imagem) via Pollinations (grátis, sem chave).
+                    // Sem CORS aqui (main process) → sem proxy; salva em Downloads + miniaturas.
+                    setAgentVisual('acting');
+                    const q = (action.prompt || '').trim();
+                    const want = Math.min(Math.max(Number(action.count) || 1, 1), 4);
+                    if (q.length < 2) {
+                      toolResult = { success: false, error: 'generate_image needs a prompt.' };
+                    } else {
+                      onProgress({ kind: 'status', message: `🎨 Generating ${want > 1 ? `${want} images` : 'an image'} of "${q}"…` });
+                      const gr = await window.electronAPI?.generateImage?.(q, want);
+                      if (gr?.success && gr.saved > 0) {
+                        const folder = gr.dir ? gr.dir.split(/[\\/]/).pop() : q;
+                        const doneMsg = `${gr.saved} image${gr.saved > 1 ? 's' : ''} of "${q}" generated and saved to Downloads/${folder}/`;
+                        onProgress({ kind: 'media', mediaKind: 'image', paths: gr.paths || [], dir: gr.dir || '', total: gr.saved, label: `${gr.saved} image(s) of "${q}"` });
+                        onProgress({ kind: 'status', message: `✅ ${doneMsg}` });
+                        allResults.push({ action, result: { success: true, info: { saved: gr.saved, dir: gr.dir } } });
+                        if (actionQueue.length === 0) {
+                          setLastFooterMsg(`✅ ${doneMsg}`);
+                          finishRun('success', doneMsg);
+                          return { thought: doneMsg, results: allResults, done: { type: 'done', reason: doneMsg, success: true } as BrowserAction };
+                        }
+                        toolResult = { success: true, info: { saved: gr.saved } };
+                      } else {
+                        toolResult = { success: false, error: gr?.error || 'Could not generate the image.' };
+                      }
+                    }
                   } else if (action.type === 'harvest_images') {
                     // COLHEITADEIRA: N imagens de um buscador → Downloads/<tema>/, em
                     // paralelo. Colhe DENTRO do webview (same-origin = sem 403): DDG i.js,
@@ -2611,7 +2639,7 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                   // Internal actions (plan/store/extract_text) never change the page — skip the
                   // settle + re-observe machinery (10-20s on heavy pages) and reuse the current state.
                   const pageNeutralAction = action.type === 'plan' || action.type === 'store' || action.type === 'extract_text'
-                    || action.type === 'extract_images' || action.type === 'search_images' || action.type === 'harvest_images' || action.type === 'download' || action.type === 'download_video'
+                    || action.type === 'extract_images' || action.type === 'search_images' || action.type === 'harvest_images' || action.type === 'generate_image' || action.type === 'download' || action.type === 'download_video'
                     || action.type === 'read_aloud';
                   let screenshotAfter: string | undefined;
                   let afterObservation: ObservedState;
@@ -2672,7 +2700,7 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                   });
                   // Internal-state actions (plan/store/extract) don't change the page — don't penalize them
                   const internalAction = action.type === 'plan' || action.type === 'store' || action.type === 'extract_text'
-                    || action.type === 'extract_images' || action.type === 'search_images' || action.type === 'harvest_images' || action.type === 'download' || action.type === 'download_video'
+                    || action.type === 'extract_images' || action.type === 'search_images' || action.type === 'harvest_images' || action.type === 'generate_image' || action.type === 'download' || action.type === 'download_video'
                     || action.type === 'read_aloud' || action.type === 'wait';
                   if (internalAction) {
                     // keep noEffectCount unchanged

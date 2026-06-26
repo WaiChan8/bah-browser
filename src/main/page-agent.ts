@@ -7,6 +7,7 @@ export type AgentAction =
   | { type: 'extract_images'; min_width?: number }
   | { type: 'search_images'; query: string; min_width?: number; count?: number }
   | { type: 'harvest_images'; query: string; count?: number; min_width?: number }
+  | { type: 'generate_image'; prompt: string; count?: number }
   | { type: 'download'; url: string; filename?: string }
   | { type: 'download_video'; url?: string; query?: string; audio_only?: boolean; count?: number; quality?: 'best' | 'low' }
   | { type: 'open_video_cuts'; phrase: string; count?: number }
@@ -56,6 +57,7 @@ const VALID_ACTIONS = new Set([
   'extract_images',
   'search_images',
   'harvest_images',
+  'generate_image',
   'download',
   'download_video',
   'open_video_cuts',
@@ -221,6 +223,8 @@ export class PageAgent {
         return { type: 'search_images', query: String(action.query ?? action.text ?? ''), min_width: toOptionalNumber(action.min_width), count: toOptionalNumber(action.count) };
       case 'harvest_images':
         return { type: 'harvest_images', query: String(action.query ?? action.text ?? ''), count: toOptionalNumber(action.count), min_width: toOptionalNumber(action.min_width) };
+      case 'generate_image':
+        return { type: 'generate_image', prompt: String(action.prompt ?? action.query ?? action.text ?? ''), count: toOptionalNumber(action.count) };
       case 'download':
         return { type: 'download', url: String(action.url ?? ''), filename: action.filename ? String(action.filename) : undefined };
       case 'download_video':
