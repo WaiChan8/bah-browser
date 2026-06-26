@@ -189,6 +189,11 @@ export function getInitialShortcutAction(command: string): { action: { type: 'na
     };
   }
 
+  // Se o usuário deu uma URL/site explícito, NÃO fast-pathar pra um site conhecido —
+  // deixa o agente navegar pra URL que ele pediu. (Gmail compose acima continua, pois
+  // e-mail não conta como URL.)
+  if (commandHasExplicitUrl(command)) return null;
+
   const site = findShortcutForCommand(command) ?? inferShortcutFromIntent(command);
   if (!site) return null;
 
@@ -279,6 +284,11 @@ const QUALITY_RE = /\b(?:n[ao]|em|com|de|in)?\s*(?:(?:melhor|boa|alta|m[aá]xima
 const QUALITY_TEST_RE = new RegExp(QUALITY_RE.source, 'i');
 
 export function detectQuickAction(command: string): QuickAction | null {
+  // URL/site explícito no comando → cede pro agente NAVEGAR pra lá (não sequestrar pra
+  // um atalho de busca tipo google_news). Conserta "vá no site X e busque Y" virar uma
+  // query-lixo no Google News. Baixar por URL não passa por aqui (a quick action de
+  // download só pega "desta página", sem URL), então não quebra.
+  if (commandHasExplicitUrl(command)) return null;
   let n = normalize(command);
 
   // CRIAR PLAYLIST é tarefa do agente (o modelo nomeia as músicas → create_playlist).
@@ -786,6 +796,17 @@ function normalize(value: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
+}
+
+// Detecta uma URL/site EXPL\u00cdCITO no comando ("v\u00e1 em example.com", "https://\u2026",
+// "busque em zoom.com.br") \u2014 sinal de que o usu\u00e1rio quer NAVEGAR pra um site espec\u00edfico,
+// e n\u00e3o cair num atalho de busca (Google News/Shopping). Quando isso acontece, os atalhos
+// determin\u00edsticos CEDEM (retornam null) e o agente navega pra URL e interage com ela.
+// Ignora e-mails: o dom\u00ednio colado num '@' n\u00e3o casa (o '@' n\u00e3o entra na fronteira inicial).
+function commandHasExplicitUrl(command: string): boolean {
+  const s = command || '';
+  if (/\bhttps?:\/\/\S+/i.test(s)) return true;
+  return /(^|[\s(/"'])([a-z0-9-]+\.)+(com|org|net|gov|edu|io|co|info|app|dev|me|tv|br|uk|us|ca|de|fr|es|pt|it|nl|ai|gg|xyz)(\b|\/)/i.test(s);
 }
 
 function safeHost(url?: string): string {
