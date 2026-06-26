@@ -20,7 +20,7 @@
 
 > You give natural-language commands ("open gmail and delete the spam") and the AI operates the browser in your place — reading the screen, clicking with a real mouse, typing, and going until it's done.
 
-> 💸 **No expensive GPU required.** Works on any PC: by default it runs on **DeepSeek's API — top-tier reasoning for a fraction of a cent per task** (also works with **Mistral** and **NVIDIA NIM**). Want 100% free + offline instead? Run a local model with **Ollama** (optional, needs a decent GPU). Either way, **you don't need a powerful local AI to try it.**
+> 💸 **Free out of the box — no key, no GPU.** It works the moment you open it: chat and image generation run **free via Pollinations**, no API key needed. For the full autonomous agent (or more speed), add a cheap **DeepSeek** key — also supports **Mistral** / **NVIDIA NIM** — or a free Pollinations account. Prefer 100% local + offline? Run a model with **Ollama**.
 
 <p align="center">
   <a href="https://www.electronjs.org"><img src="https://img.shields.io/badge/Electron-2B2E3A?style=flat-square&logo=electron&logoColor=white" alt="Electron" /></a>
@@ -62,7 +62,7 @@
 - **Full browser** with tabs, navigation, URL bar, dark theme
 - **AGENT panel** on the side: type a command → the AI decides step by step until it's done
 - **Reads the page** (DOM, numbered interactive elements, and OCR) and acts through structured tools — it doesn't rely on "seeing" the screen
-- **AI**: **DeepSeek** (cloud) — tested and recommended, fast and stable — also works with **Mistral** and **NVIDIA NIM** — or **Ollama** (local/offline) to run the AI on your own machine
+- **AI**: **works free out of the box** via **Pollinations** (no key) — great for chat and image generation. For the full autonomous agent: **DeepSeek** (cheap, recommended) — also **Mistral** / **NVIDIA NIM** — or **Ollama** (local/offline)
 - **Chat per tab** — each browser tab keeps its own conversation; the AI remembers each tab separately
 - **One-shot skills**: open N videos at once, build a "supercut" of a spoken phrase, **chat about a YouTube video using its transcript**, compare prices, fetch news — deterministic shortcuts that cost zero tokens
 - **UI in English by default**, with **Português** and **Español** available in Settings — the AI replies in your chosen language
@@ -80,7 +80,7 @@
 |---|---|
 | Browser shell | **Electron 42** + Chromium |
 | UI | **React 19** + **TypeScript** + Vite |
-| AI (cloud) | **DeepSeek** (recommended) · **Mistral** · **NVIDIA NIM** |
+| AI (cloud) | **Pollinations** (free, default) · **DeepSeek** (recommended) · **Mistral** · **NVIDIA NIM** |
 | AI (local) | **Ollama** |
 | Adblock | `@ghostery/adblocker-electron` |
 | Webview | `<webview>` tag with persistent partition |
@@ -139,7 +139,7 @@ Windows shortcut: double-click `Abrir-Bah.bat`.
 
 1. Open the browser, click the **AI** button in the address bar.
 2. Gear icon → pick a provider.
-3. **Cloud (recommended):** pick a provider — **DeepSeek**, **Mistral** or **NVIDIA NIM** — and paste that provider's API key (DeepSeek's is very cheap, pay-per-use). → Save.
+3. **Works free already (default):** nothing to set up — it runs free via **Pollinations** (no key). **For the full agent / more speed:** pick **DeepSeek**, **Mistral** or **NVIDIA NIM** and paste that provider's key (DeepSeek's is very cheap), or register free at Pollinations. → Save.
 4. **Local (optional, free/offline):** install [Ollama](https://ollama.com) and **keep it running** (it lives in the tray and serves models at `127.0.0.1:11434`). Then download a model from inside Bah (☁️/🏠 → 🏠 Local AI → type a name → **Download**) or in a terminal (e.g. `ollama pull qwen3:14b`). Local works offline, but the cloud (DeepSeek) is more reliable.
 
 ---
