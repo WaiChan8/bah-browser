@@ -1169,7 +1169,7 @@ function setupIPC(): void {
       properties: ['openFile'],
       filters: [
         { name: 'Videos', extensions: ['mp4', 'mkv', 'mov', 'avi', 'webm', 'm4v', 'flv', 'wmv', 'mpeg', 'mpg', 'ts'] },
-        { name: 'Todos os arquivos', extensions: ['*'] },
+        { name: 'All files', extensions: ['*'] },
       ],
     });
     if (r.canceled || !r.filePaths[0]) return { canceled: true };

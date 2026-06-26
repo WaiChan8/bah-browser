@@ -3131,7 +3131,7 @@ function fallbackThreeBullets(text: string): string[] {
     .map(s => s.trim())
     .filter(s => s.length > 45 && s.length < 260);
   const picked = sentences.slice(0, 3);
-  while (picked.length < 3) picked.push('O texto principal foi isolado para leitura sem distracoes.');
+  while (picked.length < 3) picked.push('The main text was isolated for distraction-free reading.');
   return picked.map(s => s.length > 150 ? `${s.slice(0, 147).trim()}...` : s);
 }
 
@@ -3171,7 +3171,7 @@ const TRASH_DESTROYER_EXTRACT_SCRIPT = `
   const text = (best?.paragraphs?.length ? best.paragraphs.join('\\n\\n') : best?.text || allText).slice(0, 18000);
   const removedCount = document.querySelectorAll(noise).length;
   return {
-    title: document.querySelector('h1')?.innerText?.trim() || document.title || 'Leitura limpa',
+    title: document.querySelector('h1')?.innerText?.trim() || document.title || 'Clean reading',
     subtitle: document.querySelector('meta[name="description"]')?.getAttribute('content') || '',
     url: location.href,
     host: location.hostname.replace(/^www\\./,''),
@@ -3199,7 +3199,7 @@ window.__trashDestroyer = window.__trashDestroyer || {
         .filter(t => t.length > 55)
         .slice(0, 14);
       const bullets = (payload.summary || []).slice(0, 3);
-      document.title = 'Leitura limpa - ' + (payload.title || 'Resumo');
+      document.title = 'Clean reading - ' + (payload.title || 'Summary');
       document.documentElement.style.overflow = 'auto';
       document.body.innerHTML = '<div id="trash-destroyer-root"></div>';
       const root = document.getElementById('trash-destroyer-root');
@@ -3238,21 +3238,21 @@ window.__trashDestroyer = window.__trashDestroyer || {
         <div class="td-scan"></div>
         <main class="td-shell">
           <div class="td-top">
-            <div class="td-brand"><span class="td-mark"></span><span>Destruidor de Lixo</span></div>
-            <button class="td-restore" type="button">Restaurar pagina</button>
+            <div class="td-brand"><span class="td-mark"></span><span>Trash Destroyer</span></div>
+            <button class="td-restore" type="button">Restore page</button>
           </div>
           <section class="td-hero">
-            <div class="td-kicker">\${esc(payload.host)} - modo leitura instantaneo</div>
+            <div class="td-kicker">\${esc(payload.host)} - instant reading mode</div>
             <h1>\${esc(payload.title)}</h1>
             \${payload.subtitle ? '<p class="td-sub">' + esc(payload.subtitle) + '</p>' : ''}
             <div class="td-stats">
-              <span class="td-pill">\${esc(payload.removedCount || 0)} elementos de ruido detectados</span>
-              <span class="td-pill">Resumo em 3 pontos</span>
-              <span class="td-pill">DOM refeito localmente</span>
+              <span class="td-pill">\${esc(payload.removedCount || 0)} noise elements detected</span>
+              <span class="td-pill">3-point summary</span>
+              <span class="td-pill">DOM rebuilt locally</span>
             </div>
           </section>
           <section class="td-summary">
-            \${bullets.map((b, i) => '<article class="td-card"><span class="td-num">PONTO ' + String(i + 1).padStart(2,'0') + '</span><p>' + esc(b) + '</p></article>').join('')}
+            \${bullets.map((b, i) => '<article class="td-card"><span class="td-num">POINT ' + String(i + 1).padStart(2,'0') + '</span><p>' + esc(b) + '</p></article>').join('')}
           </section>
           <article class="td-reading">
             \${paragraphs.map(p => '<p>' + esc(p) + '</p>').join('')}

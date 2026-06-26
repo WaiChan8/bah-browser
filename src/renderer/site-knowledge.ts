@@ -803,7 +803,7 @@ function normalize(value: string): string {
 // e n\u00e3o cair num atalho de busca (Google News/Shopping). Quando isso acontece, os atalhos
 // determin\u00edsticos CEDEM (retornam null) e o agente navega pra URL e interage com ela.
 // Ignora e-mails: o dom\u00ednio colado num '@' n\u00e3o casa (o '@' n\u00e3o entra na fronteira inicial).
-function commandHasExplicitUrl(command: string): boolean {
+export function commandHasExplicitUrl(command: string): boolean {
   const s = command || '';
   if (/\bhttps?:\/\/\S+/i.test(s)) return true;
   return /(^|[\s(/"'])([a-z0-9-]+\.)+(com|org|net|gov|edu|io|co|info|app|dev|me|tv|br|uk|us|ca|de|fr|es|pt|it|nl|ai|gg|xyz)(\b|\/)/i.test(s);

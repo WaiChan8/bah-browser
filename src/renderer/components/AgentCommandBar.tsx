@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { t, getLang, setLang, LANGS, Lang } from '../i18n';
 import { BrowserAction, formatAction } from '../page-executor';
 import { AISettings, LocalSettings } from '../store';
-import { detectQuickAction, getInitialShortcutAction } from '../site-knowledge';
+import { detectQuickAction, getInitialShortcutAction, commandHasExplicitUrl } from '../site-knowledge';
 
 export interface StepRecord {
   step: number;
@@ -305,6 +305,10 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
     //    um erro do classificador nunca pode quebrar supercut/preço/notícia/download/playlist.
     if (detectQuickAction(msg)) { pendingSuggestionRef.current = null; runAgent(msg); return; }
     if (/\bplaylist\b/i.test(msg) && /\b(cri\w+|mont\w+|fa[cz]\w+|gera\w+|junt\w+|adicion\w+|creat\w+|make|made|build|generat\w+|add)\b/i.test(msg)) { pendingSuggestionRef.current = null; runAgent(msg); return; }
+    // URL/site explícito + verbo de ação ("abra X e busque", "go to Y and search") → é
+    // navegação: roda o agente direto (alta confiança, 0 token). Garante que dar um site
+    // não caia no classificador nem vire query-lixo de atalho (bug do feedback do tarkam).
+    if (commandHasExplicitUrl(msg) && isImperativeAction(msg)) { pendingSuggestionRef.current = null; runAgent(msg); return; }
     // 2) A IA classifica o pedido (agir / página atual / web / chat) com o contexto da aba.
     //    Se a chamada falhar/demorar/estiver indisponível, cai no roteador determinístico abaixo.
     if (onClassify && !classifyingRef.current) {
@@ -518,7 +522,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
               {LANGS.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
             </select>
           </label>
-          <div className="mode-switch" role="tablist" aria-label="Onde a IA roda">
+          <div className="mode-switch" role="tablist" aria-label="Where the AI runs">
             <button
               type="button"
               className={`mode-opt ${!localCfg.enabled ? 'on' : ''}`}

@@ -535,6 +535,6 @@ export async function downloadVideo(
     onProgress({ state: 'completed', percent: 100, title: name, path: first });
     return { success: true, path: first, paths: all, title: name };
   }
-  onProgress({ state: 'failed', error: lastErr || 'Nada foi baixado.' });
-  return { success: false, error: lastErr || 'Nada foi baixado.' };
+  onProgress({ state: 'failed', error: lastErr || 'Nothing was downloaded.' });
+  return { success: false, error: lastErr || 'Nothing was downloaded.' };
 }

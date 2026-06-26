@@ -182,7 +182,7 @@ ${rowsHtml}
   });
 
   // ── Exportar: CSV / copiar / PDF ── tudo local, respeita filtro e ordenação ──
-  var slug = ${JSON.stringify(spec.title)}.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'tabela';
+  var slug = ${JSON.stringify(spec.title)}.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'table';
   var stamp = new Date().toLocaleDateString('sv'); // YYYY-MM-DD no fuso LOCAL
   var headerTexts = function(){
     return Array.prototype.map.call(document.querySelectorAll('thead th'), function(t){ return t.textContent.replace(/[▲▼]/g, '').trim(); });
@@ -207,14 +207,14 @@ ${rowsHtml}
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     a.download = slug + '-' + stamp + '.csv';
     document.body.appendChild(a); a.click(); a.remove();
-    flash(this, '✓ Baixado!');
+    flash(this, '✓ Downloaded!');
   });
   document.getElementById('btn-copy').addEventListener('click', function(){
     var tsv = matrix().map(function(r){ return r.join('\\t'); }).join('\\n');
     var ta = document.createElement('textarea');
     ta.value = tsv; ta.style.position = 'fixed'; ta.style.opacity = '0';
     document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); flash(this, '✓ Copiado!'); } catch (e) { flash(this, 'erro'); }
+    try { document.execCommand('copy'); flash(this, '✓ Copied!'); } catch (e) { flash(this, 'error'); }
     ta.remove();
   });
   document.getElementById('btn-pdf').addEventListener('click', function(){ window.print(); });
