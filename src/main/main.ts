@@ -672,7 +672,11 @@ function setupIPC(): void {
 
   // AI configuration
   ipcMain.handle('ai:set-provider', async (_event, provider: AIProvider, apiKey: string, baseUrl?: string) => {
-    aiEngine = new AIEngine(provider, apiKey, baseUrl);
+    // Sem chave → cai no Pollinations (grátis, keyless) em vez de quebrar: o app
+    // funciona de cara pra quem nunca configurou. Com chave, usa o provedor escolhido.
+    aiEngine = (apiKey?.trim() || provider === 'pollinations')
+      ? new AIEngine(provider, apiKey, baseUrl)
+      : new AIEngine('pollinations', '');
     pageAgent = new PageAgent(aiEngine);
     return { success: true };
   });
@@ -2114,8 +2118,9 @@ app.whenReady().then(() => {
   startCookieFlushInterval();
   setupAutoUpdater();
 
-  // Default cloud engine (no key yet — user sets in settings)
-  aiEngine = new AIEngine('deepseek', '');
+  // Default cloud engine: Pollinations (free, keyless) so the app works out of the box.
+  // The user can switch to DeepSeek/Mistral/NVIDIA with a key in settings for full power.
+  aiEngine = new AIEngine('pollinations', '');
   pageAgent = new PageAgent(aiEngine);
 
 

@@ -547,7 +547,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
             <button
               type="button"
               className={`mode-opt ${!localCfg.enabled ? 'on' : ''}`}
-              onClick={() => { setLocalCfg(p => ({ ...p, enabled: false })); setSettings(s => ({ ...s, provider: s.provider === 'mistral' || s.provider === 'nvidia' ? s.provider : 'deepseek' })); }}
+              onClick={() => { setLocalCfg(p => ({ ...p, enabled: false })); setSettings(s => ({ ...s, provider: (s.provider === 'mistral' || s.provider === 'nvidia' || s.provider === 'pollinations') ? s.provider : 'deepseek' })); }}
             >☁️ {t('set.cloudMode')}<small>{t('set.cloudSmall')}</small></button>
             <button
               type="button"
@@ -560,24 +560,31 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
               <label>
                 {t('set.provider')}
                 <select
-                  value={settings.provider === 'mistral' ? 'mistral' : settings.provider === 'nvidia' ? 'nvidia' : 'deepseek'}
+                  value={settings.provider === 'mistral' ? 'mistral' : settings.provider === 'nvidia' ? 'nvidia' : settings.provider === 'pollinations' ? 'pollinations' : 'deepseek'}
                   onChange={e => setSettings({ ...settings, provider: e.target.value as AISettings['provider'], baseUrl: '' })}
                 >
+                  <option value="pollinations">Pollinations</option>
                   <option value="deepseek">DeepSeek</option>
                   <option value="mistral">Mistral</option>
                   <option value="nvidia">NVIDIA NIM</option>
                 </select>
               </label>
-              <label>
-                {t('set.apiKey')} ({settings.provider === 'mistral' ? 'Mistral' : settings.provider === 'nvidia' ? 'NVIDIA NIM' : 'DeepSeek'})
-                <input
-                  type="password"
-                  value={settings.apiKey}
-                  onChange={e => setSettings({ ...settings, apiKey: e.target.value })}
-                  placeholder={t('set.apiKeyPlaceholder', { provider: settings.provider === 'mistral' ? 'Mistral' : settings.provider === 'nvidia' ? 'NVIDIA NIM' : 'DeepSeek' })}
-                />
-              </label>
-              <div className="mm-hint">☁️ {t('set.cloudHint')} <button type="button" className="mm-link" onClick={getProviderKey}>{t('set.getKey')}</button></div>
+              {settings.provider === 'pollinations' ? (
+                <div className="mm-hint">🆓 {t('set.pollinationsHint')}</div>
+              ) : (
+                <>
+                  <label>
+                    {t('set.apiKey')} ({settings.provider === 'mistral' ? 'Mistral' : settings.provider === 'nvidia' ? 'NVIDIA NIM' : 'DeepSeek'})
+                    <input
+                      type="password"
+                      value={settings.apiKey}
+                      onChange={e => setSettings({ ...settings, apiKey: e.target.value })}
+                      placeholder={t('set.apiKeyPlaceholder', { provider: settings.provider === 'mistral' ? 'Mistral' : settings.provider === 'nvidia' ? 'NVIDIA NIM' : 'DeepSeek' })}
+                    />
+                  </label>
+                  <div className="mm-hint">☁️ {t('set.cloudHint')} <button type="button" className="mm-link" onClick={getProviderKey}>{t('set.getKey')}</button></div>
+                </>
+              )}
               <details className="mm-imp">
                 <summary>{t('set.advanced')}</summary>
                 <label>
