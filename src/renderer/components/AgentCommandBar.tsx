@@ -572,7 +572,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
               </label>
               {settings.provider === 'pollinations' ? (
                 <>
-                  <div className="mm-hint">🆓 {t('set.pollinationsHint')} <button type="button" className="mm-link" onClick={getProviderKey}>{t('set.register')}</button></div>
+                  <div className="mm-hint pollinations-note">🆓 {t('set.pollinationsHint')} <button type="button" className="mm-link" onClick={getProviderKey}>{t('set.register')}</button></div>
                   <label>
                     {t('set.pollinationsKeyOptional')}
                     <input
