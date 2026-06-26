@@ -288,7 +288,7 @@ export class AIEngine {
       case 'deepseek': return 'https://api.deepseek.com';
       case 'mistral': return 'https://api.mistral.ai';
       case 'nvidia': return 'https://integrate.api.nvidia.com';
-      case 'pollinations': return 'https://gen.pollinations.ai';
+      case 'pollinations': return 'https://text.pollinations.ai';
       case 'ollama': return 'http://localhost:11434';
     }
   }
@@ -490,13 +490,14 @@ export class AIEngine {
     });
 
     const body: any = {
-      model: 'openai-fast', // free tier on Pollinations with vision
+      model: 'openai-fast', // free tier on Pollinations (keyless) with vision
       messages: [{ role: 'system', content: systemMsg }, ...formatted],
       max_tokens: 4096,
     };
     if (isAgentMode) body.response_format = { type: 'json_object' };
 
-    const res = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+    // Endpoint OpenAI-compatible SEM chave. (O gen.pollinations.ai virou 401; este é o vivo.)
+    const res = await fetch(`${this.baseUrl}/openai`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
