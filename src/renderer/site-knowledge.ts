@@ -467,12 +467,12 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
   {
     const sp = n.replace(/([a-z])(\d)/g, '$1 $2');
     const isDl = /\b(baix\w*|download|downloading|salv\w*|save|saving)\b/.test(sp);
-    const watchVerb = /\b(abr\w+|mostr\w+|toc\w+|toqu\w+|coloc\w+|coloqu\w+|p[oõ]e\b|bota\w*|reproduz\w+|assist\w+|open\w*|play\w*|show\w*|watch\w*)\b/.test(sp);
-    const mediaWord = /\b(video|videos|clipe|clipes|musica|musicas|cancao|cancoes|song|songs|track|tracks|clip|clips)\b/.test(sp);
+    const watchVerb = /\b(abr\w+|mostr\w+|toc\w+|toqu\w+|coloc\w+|coloqu\w+|p[oõ]e\b|pon\b|poner\b|pong\w+|ponme\b|bota\w*|reprodu\w+|assist\w+|open\w*|play\w*|show\w*|watch\w*)\b/.test(sp);
+    const mediaWord = /\b(video|videos|clipe|clipes|musica|musicas|cancao|cancoes|cancion|canciones|song|songs|track|tracks|clip|clips)\b/.test(sp);
     const cm = sp.match(/\b(\d{1,2}|duas|dois|tres|quatro|cinco|seis|sete|oito|nove|dez|two|three|four|five|six|seven|eight|nine|ten)\s+(?:abas?|guias?|tabs?|musicas?|videos?|cancoes|clipes?|songs?|tracks?|clips?)\b/);
     const cnt = cm ? (NUM_WORDS[cm[1]] || parseInt(cm[1], 10) || 0) : 0;
     if (!isDl && watchVerb && mediaWord && cnt >= 2) {
-      const STRIP = new Set(('abre abra abrir mostra mostre mostrar toca tocar toque coloca colocar coloque poe poem bota botar reproduz reproduzir assistir assista navegador aba abas guia guias cada uma com no na do da de dos das o a os as e em uns umas open play show watch tab tabs each one with in on the of a an song songs track tracks video videos clip clips musica musicas cancao cancoes clipe clipes filme').split(' '));
+      const STRIP = new Set(('abre abra abrir mostra mostre mostrar toca tocar toque coloca colocar coloque poe poem pon poner ponme ponga bota botar reproduz reproduzir reproducir reproduce assistir assista navegador aba abas guia guias cada uma com no na do da de dos das o a os as e em uns umas un una open play show watch tab tabs each one with in on the of a an song songs track tracks video videos clip clips musica musicas cancao cancoes cancion canciones clipe clipes filme').split(' '));
       const q = stripAgentMeta(command).replace(/([a-z])(\d)/gi, '$1 $2').split(/\s+/)
         .filter(w => { const nw = normalize(w); return w && !STRIP.has(nw) && !/^\d{1,2}$/.test(nw) && !(nw in NUM_WORDS); })
         .join(' ').trim();
@@ -488,15 +488,15 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
     const isDownload = /\b(baix\w*|download|downloading|salv\w*|save|saving)\b/.test(n);
     const phraseCue = /\b(onde\s+(?:falam|dizem|aparece)|frase|supercut|trecho|where\s+(?:they\s+)?(?:say|says)|phrase)\b/.test(n);  // → open_video_cuts, não isso
     // toc\w+ pega "tocar/toca" mas NÃO "toque" (t-o-q-u-e); idem coloc/coloque → cobre os dois.
-    const watchVerb = /\b(mostr\w+|veja|vejam|assist\w+|abr\w+|toc\w+|toqu\w+|coloc\w+|coloqu\w+|reproduz\w+|bota\b|botar\b|p[oõ]e\b|poem\b|quero\s+ver|ver\s+(?:um|uma)\b|watch|watching|play|playing|open|opening|show|showing|see|put\s+on)\b/.test(n);
-    const mediaWord = /\b(video|videos|clipe|clipes|musica|musicas|cancao|filme|tutorial|aula|show|song|songs|track|movie|clip|clips)\b/.test(n);
+    const watchVerb = /\b(mostr\w+|veja|vejam|assist\w+|abr\w+|toc\w+|toqu\w+|coloc\w+|coloqu\w+|reprodu\w+|bota\b|botar\b|p[oõ]e\b|poem\b|pon\b|poner\b|pong\w+|ponme\b|quero\s+ver|quiero\s+ver|ver\s+(?:un|una|um|uma)\b|watch|watching|play|playing|open|opening|show|showing|see|put\s+on)\b/.test(n);
+    const mediaWord = /\b(video|videos|clipe|clipes|musica|musicas|cancao|cancion|canciones|filme|tutorial|aula|show|song|songs|track|movie|clip|clips)\b/.test(n);
     const someoneDoing = /\b(mostr\w+|veja|quero\s+ver|show\s+me|i\s+want\s+to\s+see|watch)\b/.test(n)
       && /\b(alguem|gente|como|someone|somebody|people|how\s+to)\b/.test(n)
       && /\b(faz\w+|fazendo|cozinh\w+|prepar\w+|toc\w+|jog\w+|consert\w+|troc\w+|ensin\w+|dan[cç]\w+|cant\w+|pint\w+|desenh\w+|making|doing|cooking|preparing|playing|fixing|changing|teaching|dancing|singing|painting|drawing)\b/.test(n);
     if (!isDownload && !phraseCue && ((watchVerb && mediaWord) || someoneDoing)) {
-      const STRIP = new Set(('mostre mostra mostrar mostrem me te ver veja vejam quero queria assistir assista abre abra abrir ' +
-        'toca tocar toque coloca colocar coloque poe poem bota botar reproduz reproduzir alguem gente algum alguma ' +
-        'um uma uns umas o a os as de do da dos das video videos clipe clipes musica musicas cancao filme tutorial aula show por favor pra para ' +
+      const STRIP = new Set(('mostre mostra mostrar mostrem me te ver veja vejam quero queria quiero assistir assista abre abra abrir ' +
+        'toca tocar toque coloca colocar coloque poe poem bota botar pon poner ponme ponga reproduz reproduzir reproducir reproduce alguem gente algum alguma ' +
+        'um uma uns umas un una o a os as de do da dos das video videos clipe clipes musica musicas cancao cancion canciones filme tutorial aula show por favor pra para ' +
         'watch play open show see put on someone somebody people how to a an the of for me i want to song songs track movie clip clips').split(' '));
       const q = stripAgentMeta(command).split(/\s+/)
         .filter(w => { const nw = normalize(w); return w && !STRIP.has(nw); })
