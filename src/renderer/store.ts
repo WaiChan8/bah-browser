@@ -10,6 +10,7 @@ export interface Tab {
   canGoBack: boolean;
   canGoForward: boolean;
   hidden?: boolean;   // aba de trabalho (Pesquisa Rápida): carrega mas não aparece na barra
+  startup?: boolean;  // a aba que nasce no boot — só ela mostra as boas-vindas do painel
 }
 
 export interface ChatMessage {
@@ -54,7 +55,7 @@ export function createTab(url = googleHome()): Tab {
 }
 
 export function useTabStore() {
-  const [tabs, setTabs] = useState<Tab[]>([createTab()]);
+  const [tabs, setTabs] = useState<Tab[]>(() => { const t = createTab(); t.startup = true; return [t]; });
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);

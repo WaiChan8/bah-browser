@@ -77,6 +77,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   appendDatasetRun: (run: unknown) => ipcRenderer.invoke('dataset:append-run', run),
   datasetInfo: () => ipcRenderer.invoke('dataset:info'),
   googleLogin: () => ipcRenderer.invoke('google:login'),
+  googleCheckLogin: () => ipcRenderer.invoke('google:check-login'),
   // Atalhos de teclado estilo Chrome (vêm do menu/aceleradores no main).
   onShortcut: (cb: (action: string) => void) => {
     const listener = (_e: unknown, action: string) => cb(action);

@@ -113,6 +113,8 @@ interface Props {
   onFetchHeadlines?: (query: string) => Promise<string[]>;
   onOpenUrl: (url: string) => void;
   onGoogleLogin?: () => void;
+  googleLoggedIn?: boolean;
+  isStartupTab?: boolean;   // só a aba inicial mostra as boas-vindas do painel
   onClose: () => void;
   activeTabId: string;
   tabIds: string;   // ids das abas existentes (csv) — descarta conversas de abas fechadas
@@ -122,7 +124,7 @@ interface Props {
   onLocalSettingsChange: (settings: LocalSettings) => Promise<void>;
 }
 
-export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onClassify, onOpenUrl, onGoogleLogin, onClose, activeTabId, tabIds, aiSettings, onSettingsChange, localSettings, onLocalSettingsChange }: Props) {
+export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onClassify, onOpenUrl, onGoogleLogin, googleLoggedIn, isStartupTab, onClose, activeTabId, tabIds, aiSettings, onSettingsChange, localSettings, onLocalSettingsChange }: Props) {
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Caixa unificada: a proposta de ação do último turno de chat (se houver). Um "sim"
@@ -686,7 +688,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
 
       {/* ── Unified activity feed (infinite scroll, persists across tasks) ── */}
       <div className="agent-feed" ref={feedRef} onScroll={onFeedScroll}>
-        {feed.length === 0 && (
+        {feed.length === 0 && isStartupTab && (
           <div className="feed-empty">
             {!aiSettings.apiKey && !localSettings.enabled && (
               <div className="ai-onboard">
@@ -695,7 +697,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
                 <button className="ai-onboard-btn" onClick={() => setShowSettings(true)}>{t('onboard.btn')}</button>
               </div>
             )}
-            {onGoogleLogin && (
+            {onGoogleLogin && !googleLoggedIn && (
               <button className="glass-login-btn" onClick={onGoogleLogin} title={t('login.google')}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M21 10h-8v3.6h4.6c-.4 2-2.2 3.4-4.6 3.4a5 5 0 110-10c1.3 0 2.4.5 3.3 1.3l2.6-2.6A8.8 8.8 0 0012 3a9 9 0 100 18c5.2 0 8.7-3.7 8.7-8.9 0-.7-.1-1.4-.3-2.1z"/></svg>
                 <span>{t('login.google')}</span>

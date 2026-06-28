@@ -83,6 +83,7 @@ declare global {
       generateImage?: (prompt: string, count?: number) => Promise<{ success: boolean; saved: number; dir?: string; paths?: string[]; error?: string }>;
       revealInFolder?: (target: string) => Promise<{ success: boolean; error?: string }>;
       googleLogin?: () => Promise<{ ok: boolean; copied?: number; browser?: string; error?: string }>;
+      googleCheckLogin?: () => Promise<{ loggedIn: boolean }>;
       onShortcut?: (cb: (action: string) => void) => (() => void) | void;
       dismissOverlays?: (wcId: number) => Promise<{ dismissed: string }>;
       makeSupercut?: (phrase: string, count?: number) => Promise<{ success: boolean; dir?: string; paths?: string[]; clipCount?: number; clips?: Array<{ title?: string; videoId: string; seconds: number }>; error?: string }>;
@@ -371,12 +372,20 @@ export default function App() {
   const isGoogleHome = (u?: string) => !!u && /^https?:\/\/(www\.)?google\.[a-z.]+\/(webhp|\?|$)/i.test(u);
   // Login do Google (navegador real → importa sessão por CDP, automático). Reusado pelo
   // botão de vidro do painel e pelo item do menu ⋮.
+  // Mostra "Conectado ao Google" no lugar do botão quando já existe sessão importada.
+  const [googleLoggedIn, setGoogleLoggedIn] = useState(false);
+  const checkGoogleLogin = useCallback(async () => {
+    try { const r = await window.electronAPI?.googleCheckLogin?.(); setGoogleLoggedIn(!!r?.loggedIn); } catch {}
+  }, []);
+  useEffect(() => { checkGoogleLogin(); }, [checkGoogleLogin]);
+
   const handleGoogleLogin = useCallback(async () => {
     setLastFooterMsg('🔑 Opening Chrome/Edge — sign in there. I detect and import it automatically (no need to close anything or click import).');
     try {
       const result = await window.electronAPI?.googleLogin?.();
       if (!result?.ok) { setLastFooterMsg(result?.error || 'Could not import the Google login.'); return; }
       setLastFooterMsg(`✅ Login imported from ${result.browser || 'Chrome/Edge'} (${result.copied || 0} cookies). Reloading…`);
+      setGoogleLoggedIn(true);
       const wv = webviewRefs.current.get(store.activeTab?.id) as any;
       try { wv?.reload?.(); } catch {}
     } catch { setLastFooterMsg('Could not open the Google login.'); }
@@ -416,6 +425,7 @@ export default function App() {
     // accounts.google.com dentro do webview embutido = sessão quebrada.
     const broken = /^https?:\/\/accounts\.google\.com\/(ServiceLogin|signin|v3\/signin|InteractiveLogin)/i.test(u);
     setShowGoogleRelogin(broken);   // dispensar (✕) fica dispensado até a URL mudar (dep abaixo)
+    if (broken) setGoogleLoggedIn(false);   // sessão caiu → volta a oferecer "Entrar no Google"
   }, [store.activeTab?.url]);
   const runFind = useCallback((text: string, opts?: { findNext?: boolean; forward?: boolean }) => {
     const wv = getActiveWebview() as any;
@@ -754,8 +764,8 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                   <span className={`menu-switch ${hwAccelOn ? 'on' : ''}`}>{hwAccelOn ? 'ON' : 'OFF'}</span>
                 </button>
                 <button className="menu-item" onClick={() => { setMenuOpen(false); handleGoogleLogin(); }} title={t('menu.googleLoginTitle')}>
-                  <span className="menu-ic">🔑</span>
-                  <span className="menu-label">{t('menu.googleLogin')}</span>
+                  <span className="menu-ic">{googleLoggedIn ? '✓' : '🔑'}</span>
+                  <span className={`menu-label${googleLoggedIn ? ' connected' : ''}`}>{googleLoggedIn ? t('menu.googleConnected') : t('menu.googleLogin')}</span>
                 </button>
                 <div className="menu-sep" />
                 <div className="menu-section-title">
@@ -2922,6 +2932,8 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
             onClassify={classifyIntent}
             onFetchHeadlines={fetchNewsHeadlines}
             onGoogleLogin={handleGoogleLogin}
+            googleLoggedIn={googleLoggedIn}
+            isStartupTab={!!store.activeTab?.startup}
             onOpenUrl={(url: string) => { const id = store.addTab(url); activeTabIdRef.current = id; }}
             onClose={() => store.setSidebarOpen(false)}
             aiSettings={store.aiSettings}

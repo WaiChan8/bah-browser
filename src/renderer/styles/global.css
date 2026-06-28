@@ -1601,6 +1601,9 @@ body {
 .glass-login-btn:hover { transform:translateY(-1px); background:rgba(255,255,255,0.86); box-shadow:0 12px 34px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.7); }
 .glass-login-btn svg { flex:none; opacity:0.85; }
 
+/* "Conectado ao Google" no menu ⋮ — verde discreto */
+.menu-label.connected { color:#9ad7a8; }
+
 .menu-wrap { position:relative; flex:none; }
 .menu-btn {
   width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center;

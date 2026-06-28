@@ -1304,6 +1304,15 @@ function setupIPC(): void {
   // Chrome/Edge profile for the login, then import the Google cookies into Bah.
   ipcMain.handle('google:login', async () => loginWithSystemBrowser());
 
+  // Checa se já existe sessão do Google no partition do navegador (cookie de auth presente)
+  // → o renderer usa isso pra trocar o botão "Entrar no Google" por "Conectado ao Google".
+  ipcMain.handle('google:check-login', async () => {
+    try {
+      const cookies = await session.fromPartition(BROWSER_PARTITION).cookies.get({});
+      return { loggedIn: cookies.some(isGoogleAuthCdpCookie) };
+    } catch { return { loggedIn: false }; }
+  });
+
   // ═══ Porteiro de overlays: roda o dispensador de cookie/consent em TODOS os frames ═══
   // Só o processo principal alcança iframes de OUTRA ORIGEM (ex.: Sourcepoint da CNN/Guardian).
   // Tenta o frame principal primeiro (evita clicar dentro de iframe de anúncio). Retorna o
