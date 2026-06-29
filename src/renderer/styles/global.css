@@ -1071,6 +1071,14 @@ body {
   box-shadow:none;
   color:#f2f3f5;
 }
+/* Arquivo anexado mostrado NA mensagem do usuário (igual ChatGPT) */
+.chat-msg.user .chat-file {
+  align-self:flex-end; max-width:100%;
+  display:inline-flex; align-items:center; gap:6px;
+  margin-bottom:5px; padding:5px 10px;
+  background:#34353c; border:1px solid rgba(255,255,255,0.1); border-radius:9px;
+  color:#cfd2d8; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
 
 .chat-msg.assistant .msg-content,
 .result-report,

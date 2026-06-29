@@ -2922,9 +2922,9 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
               // Document attached → the question is about the FILE: use its extracted text
               // as context (skip the page/transcript) and answer with the selected model.
               if (docText) {
-                // docText = self-contained doc context: pass as rawContext + stateless (each
-                // question carries the full doc, so no history bloat and no misleading label).
-                const r = await window.electronAPI?.aiChat(msg, '', true, store.localSettings.enabled, chatTabId, docText);
+                // docText = self-contained doc context (rawContext). Non-stateless so the doc
+                // stays in THIS tab's history → follow-up questions still work after the chip clears.
+                const r = await window.electronAPI?.aiChat(msg, '', false, store.localSettings.enabled, chatTabId, docText);
                 const reply = (r?.response || '').trim() || (r?.error ? `Error: ${r.error}` : 'No response.');
                 store.addChatMessage('assistant', reply);
                 return { reply };

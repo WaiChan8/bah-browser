@@ -39,7 +39,7 @@ interface ActionResult {
 // Everything here is INTERCEPTED from real events — nothing is AI-generated filler.
 type FeedData =
   | { kind: 'task'; text: string }
-  | { kind: 'chat-user'; text: string }
+  | { kind: 'chat-user'; text: string; file?: string }
   | { kind: 'chat-assistant'; text: string; suggestedCommand?: string; sources?: Array<{ title: string; url: string }> }
   | { kind: 'event'; event: AgentProgressEvent }
   | { kind: 'media'; mediaKind: 'image' | 'audio' | 'video'; paths: string[]; dir: string; total: number; label: string }
@@ -287,11 +287,11 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
     }
   };
 
-  const runChat = async (msg: string, docText?: string) => {
+  const runChat = async (msg: string, docText?: string, fileName?: string) => {
     convoTabRef.current = activeTabId;
     setChatLoading(true);
     stickToBottomRef.current = true;
-    push({ kind: 'chat-user', text: msg });
+    push({ kind: 'chat-user', text: msg, file: fileName });
     setInput('');
     try {
       const { reply, suggestedCommand } = await onSendChat(msg, docText);
@@ -400,7 +400,9 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
       // Instrução explícita: faz ATÉ um modelo fraco usar o texto fornecido em vez de
       // dizer "não consigo ver o arquivo, cole o texto".
       const ctx = `The user attached a file named "${attachedDoc.name}". Its FULL text is provided below, between the markers. Answer the user's question using ONLY this text — do NOT say you can't see the file.\n\n===== FILE CONTENT =====\n${attachedDoc.text}\n===== END FILE =====`;
-      runChat(msg, ctx); return;   // doc Q&A
+      const fileName = attachedDoc.name;
+      setAttachedDoc(null);   // o arquivo "sai" da caixa e aparece NA conversa (estilo ChatGPT)
+      runChat(msg, ctx, fileName); return;   // doc Q&A
     }
     if (imageMode) { runImage(msg); return; }
     runUnified(msg);
@@ -847,7 +849,7 @@ function FeedRow({ item, onContinue, helpActive, onConfirmRisky, confirmActive, 
     case 'task':
       return <div className="chat-msg user"><div className="msg-content">⚡ {item.text}</div></div>;
     case 'chat-user':
-      return <div className="chat-msg user"><div className="msg-content">{item.text}</div></div>;
+      return <div className="chat-msg user">{item.file && <div className="chat-file">📄 {item.file}</div>}<div className="msg-content">{item.text}</div></div>;
     case 'chat-assistant':
       return (
         <div className="chat-msg assistant">
