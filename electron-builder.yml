@@ -11,6 +11,9 @@ directories:
 files:
   - dist/**/*
   - package.json
+# Desempacota o WASM (motor de voz local) — o onnxruntime nao carrega WASM de dentro do asar.
+asarUnpack:
+  - "**/*.wasm"
 win:
   target:
     - nsis
