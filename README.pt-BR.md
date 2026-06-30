@@ -62,7 +62,7 @@
 - **Lê a página** (DOM, elementos interativos numerados e OCR) e age por ferramentas estruturadas — sem depender de "enxergar" a tela
 - **IA**: **funciona grátis de cara** (sem chave) — ótimo pra conversar e gerar imagem. Pro agente autônomo completo: **DeepSeek** (barato, recomendado) — também **Mistral** / **NVIDIA NIM** — ou **Ollama** (local/offline)
 - **Chat por aba** — cada aba do navegador tem a sua própria conversa; a IA lembra de cada aba separadamente
-- **Atalhos de uma tacada**: abrir N vídeos de uma vez, montar um "supercut" de uma frase falada, **conversar sobre um vídeo do YouTube usando a transcrição**, comparar preços, buscar notícias — atalhos determinísticos que gastam zero tokens
+- **Atalhos de uma tacada**: abrir N vídeos de uma vez, pular pro momento exato em que uma frase é dita em vários vídeos, **conversar sobre um vídeo do YouTube usando a transcrição**, comparar preços, buscar notícias — atalhos determinísticos que gastam zero tokens
 - **UI em inglês por padrão**, com **Português** e **Español** disponíveis nas Configurações — a IA responde no idioma que você escolher
 - **Adblock** completo (EasyList + EasyPrivacy) com bypass automático em sites que quebram (YouTube, Twitch)
 - **Safe Browsing** (lista de hosts maliciosos URLhaus, atualiza diariamente)

@@ -59,7 +59,6 @@ export function useTabStore() {
   const [tabs, setTabs] = useState<Tab[]>(() => { const t = createTab(); t.startup = true; return [t]; });
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiSettings, setAISettings] = useState<AISettings>(() => {
     try {
       const saved = localStorage.getItem('aiSettings');
@@ -148,17 +147,11 @@ export function useTabStore() {
     if (url) addTab(url);
   }, [addTab]);
 
-  const addChatMessage = useCallback((role: 'user' | 'assistant', content: string) => {
-    setChatMessages(prev => [...prev, { id: uuidv4(), role, content, timestamp: Date.now() }]);
-  }, []);
-
-  const clearChat = useCallback(() => setChatMessages([]), []);
-
   return {
     tabs, activeTabId, activeTab, sidebarOpen,
-    chatMessages, aiSettings, localSettings,
+    aiSettings, localSettings,
     setActiveTabId, addTab, addHiddenTab, closeTab, updateTab, reopenClosedTab,
-    setSidebarOpen, addChatMessage, clearChat,
+    setSidebarOpen,
     setAISettings: (s: AISettings) => {
       setAISettings(s);   // memória = texto puro (UI/agente intactos)
       // No disco vai CIFRADO (cofre do SO); fire-and-forget. Se falhar, grava texto puro (nunca perde a config).

@@ -10,11 +10,9 @@ import { downloadVideo, resolveTopVideo, resolveTopVideos, resolveTopNVideos } f
 import { searchVideoCuts } from './video-cuts';
 import { fetchTranscript } from './transcript';
 import { fetchStockMovers, openDataView, type DataViewSpec } from './data-view';
-import { makeSupercut } from './supercut';
 import { harvestDownload, generateImages } from './image-harvester';
-import { cortarTrecho, removerSilencio, extrairAudio } from './video-editor';
 import { enqueueJob } from './job-queue';
-import { isHttpUrl, isHttpOrSearch, clampCount, isInsideAllowedRoot, isExistingFile } from './validate';
+import { isHttpUrl, isHttpOrSearch, clampCount, isInsideAllowedRoot } from './validate';
 import * as os from 'os';
 import { OVERLAY_DISMISS_SCRIPT } from './overlay-script';
 import { decidePopup } from './popup-shield';
@@ -43,7 +41,6 @@ const MAIN_STRINGS: Record<'en' | 'pt' | 'es', Record<string, string>> = {
     'upd.title': 'Update available', 'upd.restart': 'Restart now', 'upd.later': 'Later',
     'upd.message': 'A new version ({v}) has been downloaded.',
     'upd.detail': 'Restart to finish updating. Your settings and login are kept.',
-    'dlg.pickVideo': 'Choose a video to edit',
   },
   pt: {
     'ctx.copy': 'Copiar', 'ctx.cut': 'Recortar', 'ctx.paste': 'Colar', 'ctx.selectAll': 'Selecionar tudo',
@@ -56,7 +53,6 @@ const MAIN_STRINGS: Record<'en' | 'pt' | 'es', Record<string, string>> = {
     'upd.title': 'Atualização disponível', 'upd.restart': 'Reiniciar agora', 'upd.later': 'Depois',
     'upd.message': 'Uma nova versão ({v}) foi baixada.',
     'upd.detail': 'Reinicie para concluir a atualização. Suas configurações e login são mantidos.',
-    'dlg.pickVideo': 'Escolha um vídeo pra editar',
   },
   es: {
     'ctx.copy': 'Copiar', 'ctx.cut': 'Cortar', 'ctx.paste': 'Pegar', 'ctx.selectAll': 'Seleccionar todo',
@@ -69,7 +65,6 @@ const MAIN_STRINGS: Record<'en' | 'pt' | 'es', Record<string, string>> = {
     'upd.title': 'Actualización disponible', 'upd.restart': 'Reiniciar ahora', 'upd.later': 'Después',
     'upd.message': 'Se ha descargado una nueva versión ({v}).',
     'upd.detail': 'Reinicia para completar la actualización. Tus ajustes y sesión se mantienen.',
-    'dlg.pickVideo': 'Elige un vídeo para editar',
   },
 };
 function mt(key: string, vars?: Record<string, string>): string {
@@ -500,6 +495,10 @@ function createWindow(): void {
     titleBarStyle: 'hidden',
     autoHideMenuBar: true,
     backgroundColor: '#0d0d12',
+    // Em DEV (rodando pelo .bat), seta o ícone da janela/barra de tarefas pro logo novo.
+    // No app EMPACOTADO o executável já leva o ícone (electron-builder), e build/ não é
+    // embarcado — por isso só no dev.
+    ...(app.isPackaged ? {} : { icon: path.join(__dirname, '..', '..', 'build', 'icon.png') }),
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'preload.js'),
       contextIsolation: true,
@@ -507,6 +506,16 @@ function createWindow(): void {
       webviewTag: true,
     },
   });
+
+  // Microfone PRA NOSSA UI (recurso de voz → Whisper local). Sem isto o getUserMedia
+  // falha calado no Electron. Só a janela do app (confiável) ganha 'media'; os SITES no
+  // <webview> usam outra sessão (partition persist:browser) e seguem SEM microfone.
+  mainWindow.webContents.session.setPermissionRequestHandler((wc, permission, callback) => {
+    if (permission === 'media') return callback(wc === mainWindow?.webContents);
+    callback(true);   // demais permissões da própria UI: mantém o permissivo de antes
+  });
+  mainWindow.webContents.session.setPermissionCheckHandler((wc, permission) =>
+    permission === 'media' ? wc === mainWindow?.webContents : true);
 
   const rendererPath = path.join(__dirname, '..', 'renderer', 'index.html');
   const isDev = !app.isPackaged && !require('fs').existsSync(rendererPath);
@@ -1204,35 +1213,6 @@ function setupIPC(): void {
   // Executables are blocked by extension AND by content sniffing of the first bytes.
   const BLOCKED_EXTENSIONS = /\.(exe|msi|bat|cmd|scr|com|pif|apk|dmg|pkg|deb|rpm|js|jse|vbs|vbe|wsf|ps1|jar|lnk|hta)(\?|#|$)/i;
 
-  // ═══ Supercut: o navegador edita vídeo (frase dita N vezes → MP4 costurado) ═══
-  ipcMain.handle('media:make-supercut', async (_e, phrase: string, count?: number) =>
-    // FILA (lane 'download', junto com o download de vídeo): uma tarefa pesada por vez.
-    enqueueJob('download', async () => {
-      try {
-        return await makeSupercut(String(phrase || ''), clampCount(count, 1, 15, 6), (p) => {
-          mainWindow?.webContents.send('agent:supercut-progress', p);
-        });
-      } catch (e: any) {
-        return { success: false, error: String(e?.message ?? e) };
-      }
-    }, (ahead) => mainWindow?.webContents.send('agent:supercut-progress', { stage: 'searching', message: `In queue — ${ahead} video task(s) ahead…` }))
-      .catch((e: any) => ({ success: false, error: String(e?.message ?? e) })));
-
-  // ═══ Editor de vídeo: o navegador EDITA um vídeo local (ffmpeg nativo, 0 IA) ═══
-  // Escolher arquivo (diálogo nativo — à prova de balas, sem depender de drag-drop).
-  ipcMain.handle('video:pick', async () => {
-    const r = await dialog.showOpenDialog(mainWindow!, {
-      title: mt('dlg.pickVideo'),
-      properties: ['openFile'],
-      filters: [
-        { name: 'Videos', extensions: ['mp4', 'mkv', 'mov', 'avi', 'webm', 'm4v', 'flv', 'wmv', 'mpeg', 'mpg', 'ts'] },
-        { name: 'All files', extensions: ['*'] },
-      ],
-    });
-    if (r.canceled || !r.filePaths[0]) return { canceled: true };
-    return { canceled: false, path: r.filePaths[0] };
-  });
-
   // Attach a DOCUMENT (PDF/Word/Markdown/txt) to ask about it: native dialog → extract
   // the text → the renderer sends it as chat context (works with ANY text model, free).
   // Decode a text file respecting its encoding (Notepad saves UTF-8/UTF-16/ANSI), and
@@ -1322,33 +1302,6 @@ function setupIPC(): void {
     });
     if (r.canceled || !r.filePaths[0]) return null;
     return extractTextFromFile(r.filePaths[0]);
-  });
-
-  // Edições entram na FILA (lane 'edit') — uma por vez, em ordem, sem rejeitar a
-  // próxima. (Roda em paralelo com a lane 'download'.) Mesmas funções de sempre.
-  const editProgress = (p: any) => mainWindow?.webContents.send('agent:videoedit-progress', p);
-  const onEditQueued = (ahead: number) => editProgress({ stage: 'preparing', message: `In queue — ${ahead} edit(s) ahead…` });
-  const queueGuard = (e: any) => ({ success: false, error: String(e?.message ?? e) });
-  ipcMain.handle('videoedit:trim', async (_e, input: string, startSec: number, endSec: number) => {
-    if (!isExistingFile(input)) return { success: false, error: 'Video file not found.' };
-    return enqueueJob('edit', async () => {
-      try { return await cortarTrecho(String(input), Number(startSec), Number(endSec), editProgress); }
-      catch (e: any) { return { success: false, error: String(e?.message ?? e) }; }
-    }, onEditQueued).catch(queueGuard);
-  });
-  ipcMain.handle('videoedit:remove-silence', async (_e, input: string, opts?: any) => {
-    if (!isExistingFile(input)) return { success: false, error: 'Video file not found.' };
-    return enqueueJob('edit', async () => {
-      try { return await removerSilencio(String(input), opts || {}, editProgress); }
-      catch (e: any) { return { success: false, error: String(e?.message ?? e) }; }
-    }, onEditQueued).catch(queueGuard);
-  });
-  ipcMain.handle('videoedit:extract-audio', async (_e, input: string) => {
-    if (!isExistingFile(input)) return { success: false, error: 'Video file not found.' };
-    return enqueueJob('edit', async () => {
-      try { return await extrairAudio(String(input), editProgress); }
-      catch (e: any) { return { success: false, error: String(e?.message ?? e) }; }
-    }, onEditQueued).catch(queueGuard);
   });
 
   // ═══ Data views: dados → página bonita local (tabela + gráfico, zero CDN) ═══
@@ -1572,7 +1525,7 @@ function setupIPC(): void {
   ipcMain.handle('media:download-video', async (_e, url: string, audioOnly?: boolean, count?: number, quality?: 'best' | 'low') => {
     if (!isHttpOrSearch(url)) return { success: false, error: 'Invalid URL or search.' };
     const n = clampCount(count, 1, 50, 1);
-    // FILA (lane 'download', compartilhada com o supercut): um download pesado por vez.
+    // FILA (lane 'download'): um download pesado por vez.
     return enqueueJob('download', async () => {
       try {
         return await downloadVideo(url, { audioOnly: !!audioOnly, count: n, quality }, (p) => {
@@ -2190,6 +2143,10 @@ function setupAutoUpdater(): void {
 }
 
 app.whenReady().then(() => {
+  // Identidade própria no Windows → a barra de tarefas usa o ícone certo, não o do electron.
+  // No DEV usa um ID separado (com.vilelalab.bah.dev) pra NÃO herdar o ícone em cache do
+  // app já INSTALADO (o "b" roxo do build antigo); aí o Windows usa o ícone da janela (estrela).
+  if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.vilelalab.bah' : 'com.vilelalab.bah.dev');
   sweepOldScreenshots();
   setupAdblock();
   refreshSafeBrowsing();

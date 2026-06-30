@@ -13,7 +13,6 @@ export type AgentAction =
   | { type: 'open_video_cuts'; phrase: string; count?: number }
   | { type: 'open_video'; query: string }
   | { type: 'create_playlist'; songs: string[]; name?: string; private?: boolean }
-  | { type: 'make_supercut'; phrase: string; count?: number }
   | { type: 'render_view'; title: string; columns: string[]; rows: Array<Array<string | number>>; chart?: { type: 'bar'; label: string; labels: string[]; values: number[] }; subtitle?: string; source_note?: string }
   | { type: 'stock_movers'; direction: 'gainers' | 'losers'; count?: number }
   | { type: 'compare_prices'; query: string }
@@ -63,7 +62,6 @@ const VALID_ACTIONS = new Set([
   'open_video_cuts',
   'open_video',
   'create_playlist',
-  'make_supercut',
   'render_view',
   'stock_movers',
   'compare_prices',
@@ -245,8 +243,6 @@ export class PageAgent {
           private: action.private === true || /priv|particular/i.test(String(action.privacy ?? action.visibility ?? '')),
         };
       }
-      case 'make_supercut':
-        return { type: 'make_supercut', phrase: String(action.phrase ?? action.query ?? ''), count: action.count != null ? Number(action.count) : undefined };
       case 'render_view': {
         const columns = Array.isArray(action.columns) ? action.columns.map(String) : [];
         const rows = Array.isArray(action.rows) ? action.rows.filter((r: any) => Array.isArray(r)).slice(0, 60) : [];

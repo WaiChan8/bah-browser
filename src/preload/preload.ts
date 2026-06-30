@@ -89,25 +89,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('app:shortcut', listener);
   },
   dismissOverlays: (wcId: number) => ipcRenderer.invoke('overlays:dismiss', wcId),
-  makeSupercut: (phrase: string, count?: number) => ipcRenderer.invoke('media:make-supercut', phrase, count),
-  // ── Editor de vídeo local (ffmpeg nativo) ──
-  pickVideo: () => ipcRenderer.invoke('video:pick'),
   pickDocument: () => ipcRenderer.invoke('file:pick-extract'),
   // Resolve o caminho real de um arquivo arrastado (File → path) no Electron 33.
   getPathForFile: (file: File) => { try { return webUtils.getPathForFile(file); } catch { return ''; } },
-  editTrim: (input: string, startSec: number, endSec: number) => ipcRenderer.invoke('videoedit:trim', input, startSec, endSec),
-  editRemoveSilence: (input: string, opts?: { noiseDb?: number; minSilence?: number; pad?: number }) => ipcRenderer.invoke('videoedit:remove-silence', input, opts),
-  editExtractAudio: (input: string) => ipcRenderer.invoke('videoedit:extract-audio', input),
-  onVideoEditProgress: (cb: (p: { stage: string; message: string; percent?: number }) => void) => {
-    const listener = (_e: unknown, p: any) => cb(p);
-    ipcRenderer.on('agent:videoedit-progress', listener);
-    return () => ipcRenderer.removeListener('agent:videoedit-progress', listener);
-  },
-  onSupercutProgress: (cb: (p: any) => void) => {
-    const listener = (_e: unknown, p: any) => cb(p);
-    ipcRenderer.on('agent:supercut-progress', listener);
-    return () => ipcRenderer.removeListener('agent:supercut-progress', listener);
-  },
   stockMovers: (direction: string, count?: number) => ipcRenderer.invoke('stocks:movers', direction, count),
   onVideoProgress: (cb: (p: { state: string; percent?: number; title?: string; path?: string; error?: string; speed?: string; eta?: string }) => void) =>
     ipcRenderer.on('agent:video-progress', (_e, p) => cb(p)),

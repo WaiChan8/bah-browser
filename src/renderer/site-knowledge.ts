@@ -230,7 +230,6 @@ export type QuickAction =
   | { type: 'open_video_cuts'; phrase: string; count?: number }
   | { type: 'open_video'; query: string }
   | { type: 'open_videos'; query: string; count: number }
-  | { type: 'make_supercut'; phrase: string; count?: number }
   | { type: 'stock_movers'; direction: 'gainers' | 'losers'; count?: number }
   | { type: 'compare_prices'; query: string }
   | { type: 'google_news'; query: string }
@@ -305,9 +304,9 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
   // que o detector de download capturaria por engano (vira download_video 10x). 0 captura aqui.
   if (/\bplaylist\b/.test(n) && /\b(cri\w+|mont\w+|fa[cz]\w+|gera\w+|junt\w+|adicion\w+|creat\w+|make|made|build|generat\w+|add)\b/.test(n)) return null;
 
-  // SUPERCUT DE VERDADE (vídeo editado) — "faça um supercut de 10 pessoas falando
-  // 'X'", "monte um vídeo com várias pessoas dizendo Y". Mais específico que o
-  // open_video_cuts (abrir abas), então testa PRIMEIRO.
+  // "faça um supercut de X", "10 pessoas falando 'Y'" → LOCALIZA onde a frase é dita e
+  // ABRE cada vídeo numa aba pausada no segundo exato (open_video_cuts). Não baixa mais os
+  // trechos como arquivo (removido — ninguém usava nesse sentido). Testa antes do genérico.
   {
     const sp0 = n.replace(/([a-z])(\d)/g, '$1 $2');
     // Pergunta definicional ("o que é um supercut?", "what is a supercut") NÃO é pedido de criar.
@@ -325,7 +324,7 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
         phrase = after.replace(/^[\s:,."']+/, '').replace(/[\s"'?!.]+$/, '').trim();
       }
       if (phrase.length >= 2 && phrase.length <= 80) {
-        return { type: 'make_supercut', phrase, count: Math.min(Math.max(cnt, 1), 15) };
+        return { type: 'open_video_cuts', phrase, count: Math.min(Math.max(cnt, 1), 15) };
       }
     }
   }

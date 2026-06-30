@@ -165,6 +165,21 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
   // a caixa desmarca sozinha. Default OFF, NÃO persiste (reabrir nunca volta no modo imagem).
   const [imageMode, setImageMode] = useState(false);
   const [attachedDoc, setAttachedDoc] = useState<{ name: string; text: string } | null>(null);
+  // ── Voz: microfone → transcrição LOCAL (Whisper via Transformers.js; sem nuvem/chave) ──
+  const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'transcribing'>('idle');
+  const voiceWorkerRef = useRef<Worker | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  // Menu "+" do compositor (Anexar / Gerar imagem), estilo Claude. Fecha ao clicar fora.
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const plusWrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!plusMenuOpen) return;
+    const onDoc = (e: MouseEvent) => { if (plusWrapRef.current && !plusWrapRef.current.contains(e.target as Node)) setPlusMenuOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [plusMenuOpen]);
   // Chat POR ABA: cada aba tem sua própria conversa. A aba VISTA é a ativa; uma tarefa
   // em andamento escreve na aba onde COMEÇOU (convoTabRef), mesmo se o usuário trocar.
   const [feedsByTab, setFeedsByTab] = useState<Record<string, FeedItem[]>>({});
@@ -271,7 +286,9 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
         push({ kind: 'error', text: result.error });
       } else if ((result.done as any)?.reason) {
         push({ kind: 'report', text: (result.done as any).reason });
-        notifyDone((result.done as any).reason);
+        // Só toca o sino de "pronto" em SUCESSO. Tarefa cancelada/falha mostra o
+        // texto, mas sem o chime/notificação de "✅ Bah" (que dava falsa sensação de êxito).
+        if ((result.done as any).success !== false) notifyDone((result.done as any).reason);
       } else if (result.thought) {
         push({ kind: 'report', text: result.thought.split('\n').slice(-3).join('\n') });
         notifyDone(result.thought);
@@ -391,6 +408,124 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
     if (r.ok && r.text) setAttachedDoc({ name: r.name || 'document', text: r.text });
     else push({ kind: 'error', text: r.error || 'Could not read the file.' });
   };
+
+  // "Buscar imagens" (atalho do +): cola o gatilho na caixa e foca; a pessoa completa o tipo
+  // (e edita a quantidade). O caminho por palavra-chave ("baixar fotos de X") segue igual.
+  const startImageSearch = () => {
+    setInput(t('composer.searchImagesPrefix'));
+    setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 0);
+  };
+
+  // Selo da IA ativa (o provedor/modelo que a pessoa selecionou). SÓ lê o estado — não pesa,
+  // sem chamada nenhuma. Sem chave (e não-Pollinations) = cai no Pollinations grátis (keyless).
+  const activeAiLabel = (): string => {
+    if (localSettings.enabled) return `Ollama · ${localSettings.model || 'local'}`;
+    const p = aiSettings.provider;
+    if (p !== 'pollinations' && !aiSettings.apiKey?.trim()) return 'Pollinations';
+    if (p === 'deepseek') return 'DeepSeek';
+    if (p === 'mistral') return 'Mistral';
+    if (p === 'nvidia') {
+      const names: Record<string, string> = { 'meta/llama-3.3-70b-instruct': 'Llama 3.3 70B', 'deepseek-ai/deepseek-v4-flash': 'DeepSeek V4 Flash', 'deepseek-ai/deepseek-v4-pro': 'DeepSeek V4 Pro', 'nvidia/llama-3.3-nemotron-super-49b-v1': 'Nemotron 49B', 'z-ai/glm-5.1': 'GLM 5.1', 'qwen/qwen3-next-80b-a3b-instruct': 'Qwen3 80B' };
+      return aiSettings.model && names[aiSettings.model] ? `NVIDIA · ${names[aiSettings.model]}` : 'NVIDIA';
+    }
+    return 'Pollinations';
+  };
+
+  // Idioma da UI → nome que o Whisper entende (auto se vazio).
+  const whisperLang = (): string | undefined => ({ pt: 'portuguese', en: 'english', es: 'spanish' } as Record<string, string>)[getLang()];
+
+  const ensureVoiceWorker = (): Worker => {
+    if (!voiceWorkerRef.current) {
+      const w = new Worker(new URL('../whisper.worker.ts', import.meta.url), { type: 'module' });
+      w.onmessage = (e: MessageEvent) => {
+        const d = e.data || {};
+        if (d.type === 'result') {
+          const txt = String(d.text || '').trim();
+          if (txt) setInput(prev => (prev ? prev.trimEnd() + ' ' : '') + txt);
+          setVoiceState('idle');
+        } else if (d.type === 'error') {
+          setVoiceState('idle');
+          push({ kind: 'error', text: `Voice: ${d.error}` });
+        }
+      };
+      w.postMessage({ type: 'load' });   // começa a baixar/carregar o modelo já (em paralelo com a fala)
+      voiceWorkerRef.current = w;
+    }
+    return voiceWorkerRef.current;
+  };
+
+  // blob (webm/opus) gravado → Float32 mono 16kHz (formato que o Whisper espera).
+  const blobToPcm16k = async (blob: Blob): Promise<Float32Array> => {
+    const buf = await blob.arrayBuffer();
+    const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+    const ac = new AC();
+    const decoded = await ac.decodeAudioData(buf);
+    await ac.close();
+    const offline = new OfflineAudioContext(1, Math.max(1, Math.ceil(decoded.duration * 16000)), 16000);
+    const src = offline.createBufferSource();
+    src.buffer = decoded;
+    src.connect(offline.destination);
+    src.start(0);
+    const rendered = await offline.startRendering();
+    const data = rendered.getChannelData(0).slice();
+    // Mic fraco/Bluetooth (perfil "Hands-Free") grava BAIXO → o Whisper "alucina" frases em áudio
+    // quieto. Normaliza o volume (pico → ~0.97). Se vier quase mudo, sinaliza pra AVISAR em vez de
+    // inventar texto.
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) { const a = data[i] < 0 ? -data[i] : data[i]; if (a > peak) peak = a; }
+    if (peak < 0.01) throw new Error('NO_AUDIO');
+    if (peak < 0.97) { const g = 0.97 / peak; for (let i = 0; i < data.length; i++) data[i] *= g; }
+    return data;
+  };
+
+  const startListening = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+      const rec = new MediaRecorder(stream);
+      rec.ondataavailable = (ev) => { if (ev.data && ev.data.size) audioChunksRef.current.push(ev.data); };
+      rec.onstop = async () => {
+        mediaStreamRef.current?.getTracks().forEach(tr => tr.stop());
+        mediaStreamRef.current = null;
+        const blob = new Blob(audioChunksRef.current, { type: rec.mimeType || 'audio/webm' });
+        if (!blob.size) { setVoiceState('idle'); return; }
+        try {
+          setVoiceState('transcribing');
+          const pcm = await blobToPcm16k(blob);
+          ensureVoiceWorker().postMessage({ type: 'transcribe', audio: pcm, language: whisperLang() }, [pcm.buffer]);
+        } catch (err: any) {
+          setVoiceState('idle');
+          const m = String(err?.message || err);
+          push({ kind: 'error', text: m === 'NO_AUDIO' ? t('composer.noAudio') : `Voice: ${m}` });
+        }
+      };
+      mediaRecorderRef.current = rec;
+      ensureVoiceWorker();   // já vai carregando o modelo em paralelo (1ª vez baixa ~50MB)
+      rec.start();
+      setVoiceState('listening');
+    } catch (err: any) {
+      setVoiceState('idle');
+      push({ kind: 'error', text: `Voice: ${String(err?.message || err)}` });
+    }
+  };
+
+  const stopListening = () => {
+    try { mediaRecorderRef.current?.stop(); } catch {}
+    mediaRecorderRef.current = null;
+  };
+
+  const toggleVoice = () => {
+    if (loading || chatLoading || voiceState === 'transcribing') return;
+    if (voiceState === 'listening') stopListening();
+    else startListening();
+  };
+
+  // Limpa o worker e solta o microfone ao desmontar.
+  useEffect(() => () => {
+    try { voiceWorkerRef.current?.terminate(); } catch {}
+    try { mediaStreamRef.current?.getTracks().forEach(tr => tr.stop()); } catch {}
+  }, []);
 
   const handleSubmit = () => {
     const msg = input.trim();
@@ -742,10 +877,10 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
         )}
         {feed.map(item => <FeedRow key={item.id} item={item} onContinue={handleContinueAfterManualHelp} helpActive={!!manualHelp} onConfirmRisky={handleConfirmRisky} confirmActive={!!pendingConfirm} onRunSuggestion={(cmd) => { pendingSuggestionRef.current = null; if (!loading && !chatLoading) runAgent(cmd); }} onOpenUrl={onOpenUrl} />)}
         {chatLoading && convoTabRef.current === activeTabId && (
-          <div className="chat-msg assistant"><div className="msg-content typing"><span /><span /><span /></div></div>
+          <div className="chat-msg assistant"><div className="chat-ai-label">{activeAiLabel()}</div><div className="msg-content typing"><span /><span /><span /></div></div>
         )}
         {loading && convoTabRef.current === activeTabId && (
-          <div className="feed-working"><span className="agent-spinner" /> {t('feed.working')}</div>
+          <div className="feed-working"><span className="agent-spinner" /> <span className="feed-working-ai">{activeAiLabel()}</span> · {t('feed.working')}</div>
         )}
       </div>
 
@@ -770,28 +905,52 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
           disabled={loading || chatLoading}
         />
         <div className="composer-bar">
+          <div className="composer-plus-wrap" ref={plusWrapRef}>
+            <button
+              type="button"
+              className={`composer-plus${plusMenuOpen ? ' open' : ''}`}
+              onClick={() => setPlusMenuOpen(v => !v)}
+              disabled={loading || chatLoading}
+              title={t('composer.more')}
+              aria-label={t('composer.more')}
+              aria-expanded={plusMenuOpen}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            {plusMenuOpen && (
+              <div className="composer-plus-menu" role="menu">
+                <button type="button" role="menuitem" onClick={() => { setPlusMenuOpen(false); pickDoc(); }}>
+                  <span className="composer-menu-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></span>
+                  {t('composer.attachShort')}
+                </button>
+                <button type="button" role="menuitem" onClick={() => { setPlusMenuOpen(false); setImageMode(true); }}>
+                  <span className="composer-menu-ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l1.7 4.6 4.6 1.7-4.6 1.7L12 15.1l-1.7-4.6L5.7 8.8l4.6-1.7L12 2.5z"/></svg></span>
+                  {t('composer.imageMode')}
+                </button>
+                <button type="button" role="menuitem" onClick={() => { setPlusMenuOpen(false); startImageSearch(); }}>
+                  <span className="composer-menu-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg></span>
+                  {t('composer.searchImages')}
+                </button>
+              </div>
+            )}
+          </div>
+          {imageMode && (
+            <button type="button" className="composer-mode-chip" onClick={() => setImageMode(false)} title={t('composer.removeAttach')}>
+              {t('composer.imageMode')} <span aria-hidden="true">✕</span>
+            </button>
+          )}
+          <span className="composer-spacer" />
           <button
             type="button"
-            className={`composer-image-toggle${imageMode ? ' on' : ''}`}
-            onClick={() => setImageMode(v => !v)}
+            className={`composer-mic${voiceState === 'listening' ? ' listening' : voiceState === 'transcribing' ? ' busy' : ''}`}
+            onClick={toggleVoice}
             disabled={loading || chatLoading}
-            title={t('composer.imageMode')}
-            aria-pressed={imageMode}
+            title={voiceState === 'listening' ? t('composer.listening') : voiceState === 'transcribing' ? t('composer.voicePrep') : t('composer.voice')}
+            aria-label={t('composer.voice')}
+            aria-pressed={voiceState === 'listening'}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l1.7 4.6 4.6 1.7-4.6 1.7L12 15.1l-1.7-4.6L5.7 8.8l4.6-1.7L12 2.5z"/><path d="M18.7 14.2l.85 2.25 2.25.85-2.25.85-.85 2.25-.85-2.25-2.25-.85 2.25-.85.85-2.25z"/></svg>
-            <span>{t('composer.imageMode')}</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
           </button>
-          <button
-            type="button"
-            className={`composer-attach-btn${attachedDoc ? ' on' : ''}`}
-            onClick={pickDoc}
-            disabled={loading || chatLoading}
-            title={t('composer.attachFile')}
-            aria-label={t('composer.attachFile')}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
-          </button>
-          <div className="composer-hint">{t('composer.hint')}</div>
           {manualHelp ? (
             <button data-testid="agent-manual-continue" onClick={handleContinueAfterManualHelp} className="composer-continue" title={manualHelp.instruction}>
               {t('feed.continue')}

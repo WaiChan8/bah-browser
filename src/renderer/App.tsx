@@ -89,16 +89,8 @@ declare global {
       googleCheckLogin?: () => Promise<{ loggedIn: boolean }>;
       onShortcut?: (cb: (action: string) => void) => (() => void) | void;
       dismissOverlays?: (wcId: number) => Promise<{ dismissed: string }>;
-      makeSupercut?: (phrase: string, count?: number) => Promise<{ success: boolean; dir?: string; paths?: string[]; clipCount?: number; clips?: Array<{ title?: string; videoId: string; seconds: number }>; error?: string }>;
-      onSupercutProgress?: (cb: (p: { stage: string; message: string; current?: number; total?: number }) => void) => () => void;
-      // ── Editor de vídeo local (ffmpeg nativo) ──
-      pickVideo?: () => Promise<{ canceled: boolean; path?: string }>;
       pickDocument?: () => Promise<{ ok: boolean; name?: string; text?: string; error?: string } | null>;
       getPathForFile?: (file: File) => string;
-      editTrim?: (input: string, startSec: number, endSec: number) => Promise<{ success: boolean; path?: string; error?: string; info?: any }>;
-      editRemoveSilence?: (input: string, opts?: { noiseDb?: number; minSilence?: number; pad?: number }) => Promise<{ success: boolean; path?: string; error?: string; info?: any }>;
-      editExtractAudio?: (input: string) => Promise<{ success: boolean; path?: string; error?: string; info?: any }>;
-      onVideoEditProgress?: (cb: (p: { stage: string; message: string; percent?: number }) => void) => () => void;
       stockMovers?: (direction: string, count?: number) => Promise<{ success: boolean; spec?: any; error?: string }>;
       onVideoProgress?: (cb: (p: { state: string; percent?: number; title?: string; path?: string; error?: string; speed?: string; eta?: string }) => void) => void;
       adblockGetState?: () => Promise<{ enabled: boolean; active: boolean; bypassedHosts: string[] }>;
@@ -123,7 +115,15 @@ export default function App() {
   const [lastFooterMsg, setLastFooterMsg] = useState<string>('');
   const rippleId = useRef(0);
   const activeTabIdRef = useRef(store.activeTabId);
-  useEffect(() => { activeTabIdRef.current = store.activeTabId; }, [store.activeTabId]);
+  const userTabRef = useRef(store.activeTabId);   // a aba que o USUÁRIO está vendo (sempre atualizada)
+  const taskRunningRef = useRef(false);           // tem uma tarefa do agente rodando agora?
+  useEffect(() => {
+    userTabRef.current = store.activeTabId;
+    // Enquanto uma tarefa roda, a "aba de trabalho" do agente é controlada pelo PRÓPRIO loop
+    // (ele seta activeTabIdRef ao abrir/navegar). Se o usuário trocar de aba no meio, NÃO deixa
+    // isso sequestrar a aba do agente — senão ele passaria a clicar/observar na aba errada.
+    if (!taskRunningRef.current) activeTabIdRef.current = store.activeTabId;
+  }, [store.activeTabId]);
   // #12: o loop do agente é uma closure longa — `store.tabs` capturado no render fica
   // DEFASADO se o agente abre/fecha abas durante a execução. Espelhamos a lista viva
   // num ref pra switch_tab/close_tab/contexto do modelo lerem o estado atual, não o velho.
@@ -649,11 +649,8 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
           onClick={() => store.setSidebarOpen(!store.sidebarOpen)}
           title={t('ai.toggle')}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 01-2 2H10a2 2 0 01-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z"/>
-            <path d="M10 21h4M12 17v4"/>
-          </svg>
-          <span>AI</span>
+          <svg width="18" height="18" viewBox="5 2 14 14" fill="currentColor"><path d="M12 2.5l1.7 4.6 4.6 1.7-4.6 1.7L12 15.1l-1.7-4.6L5.7 8.8l4.6-1.7L12 2.5z"/></svg>
+          <span>{t('ai.short')}</span>
         </button>
         <div className="window-controls">
           <button onClick={() => window.electronAPI?.minimize()} className="win-btn minimize" title={t('win.minimize')}>
@@ -876,6 +873,8 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
             onExecute={async (command, onProgress, signal, opts) => {
               const runLog = startAgentRun(command);
               const taskTabId = activeTabIdRef.current;   // aba de origem desta tarefa (não muda se o agente abrir abas)
+              taskRunningRef.current = true;   // a partir daqui, trocas MANUAIS de aba não mexem na aba do agente
+              try {
               if (isTrashDestroyerCommand(command)) {
                 const wv = getActiveWebview();
                 if (!wv) return { error: 'No active webview', results: [] };
@@ -1038,6 +1037,11 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                   note: request.instruction,
                 });
                 await new Promise<void>((resolve) => {
+                  // Se o usuário apertar Parar durante a ajuda manual, o sinal de abort
+                  // resolve a espera (senão o loop ficava preso pra sempre aguardando o
+                  // "Continuar"). O throwIfCancelled logo abaixo converte isso em cancelamento limpo.
+                  if (signal?.aborted) { resolve(); return; }
+                  signal?.addEventListener('abort', () => resolve(), { once: true });
                   onProgress({
                     kind: 'manual_help',
                     message: request.reason,
@@ -2257,38 +2261,6 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                     } else {
                       toolResult = { success: false, error: vc?.error || `Could not find videos where "${action.phrase}" is said.` };
                     }
-                  } else if (action.type === 'make_supercut') {
-                    // Acha onde a frase é dita e BAIXA cada trecho SEPARADO, na MELHOR
-                    // qualidade do vídeo (não cola mais — a colagem mutilava a fala).
-                    // Determinístico → auto-done + miniaturas clicáveis.
-                    setAgentVisual('acting');
-                    const want = Math.min(Math.max(Number(action.count) || 6, 1), 15);
-                    lastQuickActionRef.current = { type: 'make_supercut', phrase: action.phrase, count: want } as any;
-                    onProgress({ kind: 'status', message: `🎬 Finding ${want} clips where "${action.phrase}" is said and downloading in best quality…` });
-                    const unsub = window.electronAPI?.onSupercutProgress?.((p) => {
-                      const icon = p.stage === 'searching' ? '🔎' : p.stage === 'clipping' ? '⬇️' : '🎬';
-                      onProgress({ kind: 'status', message: `${icon} ${p.message}` });
-                    });
-                    let sc: { success: boolean; dir?: string; paths?: string[]; clipCount?: number; clips?: Array<{ title?: string; videoId: string; seconds: number }>; error?: string } | undefined;
-                    try {
-                      sc = await window.electronAPI?.makeSupercut?.(action.phrase, want);
-                    } finally { try { unsub?.(); } catch {} }
-                    if (sc?.success && sc.paths && sc.paths.length) {
-                      const folder = sc.dir ? sc.dir.split(/[\\/]/).pop() : action.phrase;
-                      const doneMsg = `${sc.clipCount} clips where "${action.phrase}" is said, downloaded in best quality to Downloads/${folder}/`;
-                      // miniaturas de vídeo clicáveis (clique → abre a pasta)
-                      onProgress({ kind: 'media', mediaKind: 'video', paths: sc.paths, dir: sc.dir || '', total: sc.clipCount || sc.paths.length, label: `${sc.clipCount} clips of "${action.phrase}"` });
-                      onProgress({ kind: 'status', message: `✅ ${doneMsg}` });
-                      allResults.push({ action, result: { success: true, info: { dir: sc.dir, clips: sc.clipCount } } });
-                      if (actionQueue.length === 0) {
-                        setLastFooterMsg(`✅ ${doneMsg}`);
-                        finishRun('success', doneMsg);
-                        return { thought: doneMsg, results: allResults, done: { type: 'done', reason: doneMsg, success: true } as BrowserAction };
-                      }
-                      toolResult = { success: true, info: { dir: sc.dir } };
-                    } else {
-                      toolResult = { success: false, error: sc?.error || 'Failed to download the clips.' };
-                    }
                   } else if (action.type === 'compare_prices') {
                     // "por fora" igual ao yt-dlp: vai direto no Google Shopping (que
                     // agrega ML/Amazon/Magalu/KaBuM), deixa o WEBVIEW renderizar o JS,
@@ -2917,10 +2889,15 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
               } finally {
                 setAgentVisual('idle');
               }
+              } finally {
+                // tarefa acabou (sucesso, erro OU cancelamento): solta o freio e a aba do
+                // agente volta a seguir a aba que o usuário está vendo agora.
+                taskRunningRef.current = false;
+                activeTabIdRef.current = userTabRef.current;
+              }
             }}
             onSendChat={async (msg, docText) => {
               const chatTabId = store.activeTabId;   // a conversa pertence a ESTA aba
-              store.addChatMessage('user', msg);
               // Document attached → the question is about the FILE: use its extracted text
               // as context (skip the page/transcript) and answer with the selected model.
               if (docText) {
@@ -2928,7 +2905,6 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                 // stays in THIS tab's history → follow-up questions still work after the chip clears.
                 const r = await window.electronAPI?.aiChat(msg, '', false, store.localSettings.enabled, chatTabId, docText);
                 const reply = (r?.response || '').trim() || (r?.error ? `Error: ${r.error}` : 'No response.');
-                store.addChatMessage('assistant', reply);
                 return { reply };
               }
               let pageContent = await getPageContent();
@@ -2954,7 +2930,6 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
               const m = raw.match(/\[\[\s*ACTION\s*:\s*([^\]]+?)\s*\]\]/i);
               const suggestedCommand = m ? m[1].trim() : undefined;
               const reply = raw.replace(/\[\[\s*ACTION\s*:[^\]]*\]\]/ig, '').trim() || raw.trim();
-              store.addChatMessage('assistant', reply);
               return { reply, suggestedCommand };
             }}
             onResearch={runWebResearch}

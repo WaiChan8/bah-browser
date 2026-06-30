@@ -53,7 +53,7 @@ de DOM sintéticos), então os sites reagem exatamente como reagiriam pra uma pe
 | `page-agent.ts` | Helpers de raciocínio do agente (lado nuvem) |
 | `download-manager.ts` | Gerenciador de download nativo: pausar/continuar/cancelar/fila/ETA, `open-file` guardado |
 | `media-downloader.ts` | Wrapper de `yt-dlp` / `ffmpeg` (baixar vídeo/áudio) |
-| `supercut.ts`, `video-cuts.ts`, `video-editor.ts`, `transcript.ts` | Recursos de vídeo locais (cortar melhores momentos, aparar, remover silêncio, extrair áudio, transcrições) — ffmpeg nativo |
+| `video-cuts.ts`, `transcript.ts` | Recursos de vídeo locais (localizar onde uma frase é dita, transcrições) — ffmpeg nativo |
 | `image-harvester.ts` | Colheita de imagens em massa + geração de imagem por IA (Pollinations), com limites |
 | `ocr-engine.ts`, `page-capture.ts` | OCR no aparelho (Tesseract) + screenshots |
 | `data-view.ts` | Renderiza tabelas/gráficos numa página local (sem CDN) |
@@ -93,4 +93,7 @@ de DOM sintéticos), então os sites reagem exatamente como reagiriam pra uma pe
 ## Removido / vestigial
 
 - `AISidebar.tsx` e `VideoEditorPanel.tsx` foram removidos (não eram importados). A UI viva do
-  assistente é a `AgentCommandBar`. O editor de vídeo roda pelo agente/IPC, não por um painel.
+  assistente é a `AgentCommandBar`.
+- O editor de vídeo local (`video-editor.ts`: aparar / remover silêncio / extrair áudio) e o
+  `supercut.ts` (baixar trechos) foram removidos — ninguém os acionava. Achar onde uma frase é
+  dita continua via `open_video_cuts` (abre cada vídeo pausado no segundo exato).

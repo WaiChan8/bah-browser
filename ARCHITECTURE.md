@@ -55,7 +55,7 @@ sites behave exactly as they would for a human.
 | `page-agent.ts` | Cloud-side reasoning helpers for the agent |
 | `download-manager.ts` | Native download manager: pause/resume/cancel/queue/ETA, guarded `open-file` |
 | `media-downloader.ts` | `yt-dlp` / `ffmpeg` wrapper (video/audio download) |
-| `supercut.ts`, `video-cuts.ts`, `video-editor.ts`, `transcript.ts` | Local video features (cut highlights, trim, remove silence, extract audio, transcripts) — native ffmpeg |
+| `video-cuts.ts`, `transcript.ts` | Local video features (locate where a phrase is spoken, transcripts) — native ffmpeg |
 | `image-harvester.ts` | Bulk image download + AI image generation (Pollinations), with limits |
 | `ocr-engine.ts`, `page-capture.ts` | On-device OCR (Tesseract) + screenshots |
 | `data-view.ts` | Renders data tables/charts to a local page (no CDN) |
@@ -95,4 +95,7 @@ sites behave exactly as they would for a human.
 ## Removed / vestigial
 
 - `AISidebar.tsx` and `VideoEditorPanel.tsx` were removed (they were not imported). The live
-  assistant UI is `AgentCommandBar`. The video editor runs through the agent/IPC, not a panel.
+  assistant UI is `AgentCommandBar`.
+- The local video editor (`video-editor.ts`: trim / remove silence / extract audio) and the
+  download-clips `supercut.ts` were removed — nobody drove them. Finding where a phrase is
+  spoken survives as `open_video_cuts` (opens each video paused at the exact second).

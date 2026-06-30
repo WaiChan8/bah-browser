@@ -92,8 +92,7 @@ Never generate JavaScript, CSS selectors unless using the fill tool selector fie
 - download_video: { "action": "download_video", "query"?: string, "url"?: string, "audio_only"?: boolean, "count"?: number } — downloads a video/song. BEST: pass "query" (e.g. the song/video name) and it finds AND downloads the top YouTube result directly — no need to open YouTube or click results. Or pass "url", or omit both to grab the currently open tab. Set audio_only:true to save as mp3 (for "baixar música/áudio"). Set count:N to grab the top N results (for "baixe 3 músicas do X"). Video downloads at the BEST available quality of that video BY DEFAULT — only set "quality":"low" if the user explicitly asks for low resolution ("baixa resolução"). Live progress bar; the task auto-finishes on success.
 - open_video: { "action": "open_video", "query": string } — opens and PLAYS the single best REAL YouTube video for the query, skipping Shorts/very-short clips (resolves it server-side, then navigates the tab to the watch page). Use for "mostre/abra/toque um vídeo de X", "toque uma música do Y", "mostre alguém fazendo Z". One action, auto-finishes. NEVER just dump the user on a YouTube search results page for these — the top results are Shorts; use open_video instead.
 - create_playlist: { "action": "create_playlist", "songs": string[], "name"?: string, "private"?: boolean } — builds a YouTube playlist that PLAYS IMMEDIATELY from a list of songs YOU name. For "crie/monte uma playlist com as N músicas [mais antigas/melhores/mais tocadas] de ARTISTA": use YOUR music knowledge to fill "songs" with the actual N real song titles in the requested order (e.g. oldest-first), each prefixed with the artist for accurate matching, e.g. ["2Pac Brenda's Got a Baby","2Pac Trapped","2Pac If My Homie Calls", ...]. If the user gave a NAME for the playlist (e.g. "com o nome i.a", "chamada X") put it in "name". If the user wants it PRIVATE/particular/privada, set "private": true. The system resolves each title to a real video (skipping Shorts), builds the playlist playing, and — when a name is given or the user asked to save — SAVES it to the logged-in account (renaming + setting privacy via the YouTube UI). Emit this as a SINGLE action. After it, the page is on the playlist: if RECENT HISTORY says the save still needs a step, follow that instruction; otherwise you're done.
-- open_video_cuts: { "action": "open_video_cuts", "phrase": "...", "count"?: N (default 4) } — finds YouTube videos where the PHRASE IS SPOKEN (subtitle index search) and opens each one in a BACKGROUND tab, PAUSED and muted at the EXACT second it is said; when the user clicks the tab, the video plays from that moment. Use for supercut/edição requests like "abrir vídeos onde falam X", "achar quem disse Y". One action does everything; the task auto-finishes.
-- make_supercut: { "action": "make_supercut", "phrase": "...", "count"?: N (default 6, max 12) } — finds N YouTube videos where the PHRASE IS SPOKEN and downloads each clip as a SEPARATE file (best quality) into Downloads/clips-<phrase>/. For "faça um supercut de X", "baixe trechos de gente falando Y". Does NOT glue them (clean, full-quality clips the user assembles). One action does everything and auto-finishes.
+- open_video_cuts: { "action": "open_video_cuts", "phrase": "...", "count"?: N (default 4) } — finds YouTube videos where the PHRASE IS SPOKEN (subtitle index search) and opens each one in a BACKGROUND tab, PAUSED and muted at the EXACT second it is said; when the user clicks the tab, the video plays from that moment. Use for supercut/edição requests like "faça um supercut de X", "abrir vídeos onde falam X", "achar quem disse Y". One action does everything; the task auto-finishes.
 - render_view:{ "action": "render_view", "title": "...", "columns": ["A","B"], "rows": [["x",1],["y",2]], "chart"?: { "type":"bar", "label":"...", "labels":[...], "values":[...] }, "subtitle"?, "source_note"? } — renders the data as a BEAUTIFUL local page (sortable table + search + bar chart, dark theme) opened in a new tab. WHENEVER the user asks for a table/ranking/comparison/statistics, gather the data first (extract_text, Google) and finish with render_view — NEVER dump a table as chat text. Keep rows ≤ 40 when you type them yourself.
 - stock_movers: { "action": "stock_movers", "direction": "gainers"|"losers", "count"?: N } — fetches today's top stock gainers/losers DIRECTLY from free finance APIs (B3 first, US fallback) and opens the rendered table+chart page. For any "ações que mais subiram/caíram" request use THIS as the single first action — never browse finance sites for it.
 - compare_prices: { "action": "compare_prices", "query": "..." } — for ANY price/shopping request ("preço de X", "X mais barato", "quanto custa Y", "onde comprar Z"): scrapes Google Shopping (which aggregates Mercado Livre, Amazon, Magalu, KaBuM…) and opens a price-sorted comparison table. Use this as the first action for generic price requests — but if the user named a specific store/site or gave a URL, navigate there and use its own search instead of this.
@@ -457,14 +456,15 @@ export class AIEngine {
     };
     if (isAgentMode) body.response_format = { type: 'json_object' };
 
-    const res = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+    // timeout abortável (≠ pendurar pra sempre numa rede ruim) — mesmo padrão do DeepSeek/Pollinations
+    const res = await fetchWithTimeout(`${this.baseUrl}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
-    });
+    }, 45000);
 
     if (!res.ok) {
       throw new Error(`Mistral API error ${res.status}: ${await res.text()}`);
@@ -488,14 +488,15 @@ export class AIEngine {
     };
     if (isAgentMode) body.response_format = { type: 'json_object' };
 
-    const res = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+    // timeout abortável (≠ pendurar pra sempre numa rede ruim) — mesmo padrão do DeepSeek/Pollinations
+    const res = await fetchWithTimeout(`${this.baseUrl}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
-    });
+    }, 45000);
 
     if (!res.ok) {
       throw new Error(`NVIDIA NIM API error ${res.status}: ${await res.text()}`);

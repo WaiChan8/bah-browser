@@ -12,7 +12,6 @@ export type BrowserAction =
   | { type: 'open_video'; query: string }
   | { type: 'open_videos'; query: string; count?: number }
   | { type: 'create_playlist'; songs: string[]; name?: string; private?: boolean }
-  | { type: 'make_supercut'; phrase: string; count?: number }
   | { type: 'render_view'; title: string; columns: string[]; rows: Array<Array<string | number>>; chart?: { type: 'bar'; label: string; labels: string[]; values: number[] }; subtitle?: string; source_note?: string }
   | { type: 'stock_movers'; direction: 'gainers' | 'losers'; count?: number }
   | { type: 'compare_prices'; query: string }
@@ -86,7 +85,6 @@ export function formatAction(action: BrowserAction): string {
     case 'open_video': return `open_video("${shorten(action.query, 50)}")`;
     case 'open_videos': return `open_videos("${shorten(action.query, 50)}"${action.count ? `, ${action.count} tabs` : ''})`;
     case 'create_playlist': return `create_playlist(${action.songs?.length ?? 0} songs)`;
-    case 'make_supercut': return `make_supercut("${shorten(action.phrase, 50)}"${action.count ? `, ${action.count} clips` : ''})`;
     case 'render_view': return `render_view("${shorten(action.title, 50)}", ${action.rows?.length ?? 0} rows)`;
     case 'stock_movers': return `stock_movers(${action.direction === 'losers' ? 'biggest losers' : 'biggest gainers'}${action.count ? `, ${action.count}` : ''})`;
     case 'compare_prices': return `compare_prices("${shorten(action.query, 50)}")`;

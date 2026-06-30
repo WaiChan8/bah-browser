@@ -64,7 +64,7 @@
 - **Reads the page** (DOM, numbered interactive elements, and OCR) and acts through structured tools — it doesn't rely on "seeing" the screen
 - **AI**: **works free out of the box** (no key) — great for chat and image generation. For the full autonomous agent: **DeepSeek** (cheap, recommended) — also **Mistral** / **NVIDIA NIM** — or **Ollama** (local/offline)
 - **Chat per tab** — each browser tab keeps its own conversation; the AI remembers each tab separately
-- **One-shot skills**: open N videos at once, build a "supercut" of a spoken phrase, **chat about a YouTube video using its transcript**, compare prices, fetch news — deterministic shortcuts that cost zero tokens
+- **One-shot skills**: open N videos at once, jump to the exact moment a phrase is spoken across several videos, **chat about a YouTube video using its transcript**, compare prices, fetch news — deterministic shortcuts that cost zero tokens
 - **UI in English by default**, with **Português** and **Español** available in Settings — the AI replies in your chosen language
 - **Full adblock** (EasyList + EasyPrivacy) with automatic bypass for sites that break (YouTube, Twitch)
 - **Safe Browsing** (URLhaus malicious-hosts list, updated daily)
