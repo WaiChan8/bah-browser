@@ -784,7 +784,6 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
               onClick={() => setLocalView(true)}
             >🏠 {t('set.localMode')}<small>{t('set.localSmall')}</small></button>
           </div>
-          <div className="ai-active-line">{t('set.activeAi')}: <b>{activeAiLabel()}</b></div>
           {!localView && (
             <>
               <label>
