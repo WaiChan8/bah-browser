@@ -515,7 +515,7 @@ body {
   flex:none;margin-top:8px;
 }
 .save-settings:hover:not(:disabled){opacity:0.88;}
-.save-settings:disabled{background:var(--bg-tertiary);border-color:var(--border);color:var(--text-muted);cursor:default;}
+.save-settings:disabled{background:var(--bg-tertiary);border-color:var(--border);color:var(--text-secondary);cursor:default;}
 
 /* CHAT */
 .chat-messages {
@@ -1266,7 +1266,7 @@ body {
   box-shadow:none;
 }
 
-.save-settings:hover,
+.save-settings:hover:not(:disabled),
 .execute-btn:hover:not(:disabled),
 .chat-input-area button:hover:not(:disabled) {
   background:var(--accent-hover);
