@@ -1617,6 +1617,10 @@ body {
 .chat-source:hover { border-color:var(--accent); color:var(--text-primary); background:var(--bg-hover); }
 /* ── Gerenciador de modelos Ollama (configurações do modo local) ── */
 .model-mgr { display:flex; flex-direction:column; gap:6px; }
+.mm-status { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; font-size:11.5px; font-weight:600; padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); }
+.mm-status.ok { color:#9ad7a8; border-color:rgba(120,180,130,0.4); background:rgba(120,180,130,0.08); }
+.mm-status.off { color:#e0b567; border-color:rgba(224,181,103,0.4); background:rgba(224,181,103,0.08); }
+.mm-status.none { color:#e0a5a5; border-color:rgba(224,120,120,0.4); background:rgba(224,120,120,0.08); }
 .model-mgr .mm-head { display:flex; align-items:center; justify-content:space-between; font-size:11.5px; font-weight:600; color:var(--text-secondary); }
 .mm-refresh { border:none; background:transparent; color:var(--text-muted); cursor:pointer; font-size:14px; padding:0 4px; }
 .mm-refresh:hover { color:var(--accent); }

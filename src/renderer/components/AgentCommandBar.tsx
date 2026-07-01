@@ -223,6 +223,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
   const [ggufName, setGgufName] = useState('');
   // null = ainda não checado; true = Ollama respondeu; false = não detectado (não instalado/desligado).
   const [ollamaUp, setOllamaUp] = useState<boolean | null>(null);
+  const [ollamaInstalled, setOllamaInstalled] = useState<boolean | null>(null);   // null = ainda não checado
   const [starting, setStarting] = useState(false);
   const [notInstalled, setNotInstalled] = useState(false);
   const [startMsg, setStartMsg] = useState('');
@@ -595,9 +596,11 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
   const ollamaApi = () => (window as any).electronAPI;
   const refreshModels = async () => {
     try {
+      const st = await ollamaApi()?.ollamaStatus?.(localCfg.baseUrl);   // { running, installed }
+      if (st) setOllamaInstalled(!!st.installed);
       const r = await ollamaApi()?.ollamaList?.(localCfg.baseUrl);
-      setOllamaUp(!!r?.ok);
-      if (r?.ok) setModels(r.models || []);
+      setOllamaUp(st ? !!st.running : !!r?.ok);
+      setModels(r?.ok ? (r.models || []) : []);
     } catch { setOllamaUp(false); }
   };
   // Botão único "Ligar o Ollama": tenta SUBIR o Ollama (ensure-running sobe o `ollama serve`
@@ -609,6 +612,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
     try {
       const ens = await ollamaApi()?.ollamaEnsureRunning?.(localCfg.baseUrl);
       if (ens?.ok) {
+        setOllamaInstalled(true);
         const r = await ollamaApi()?.ollamaList?.(localCfg.baseUrl);
         setOllamaUp(!!r?.ok);
         if (r?.ok) setModels(r.models || []);
@@ -616,6 +620,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
       } else {
         setOllamaUp(false);
         setNotInstalled(!!ens?.notInstalled);
+        if (ens?.notInstalled) setOllamaInstalled(false);
         setStartMsg(ens?.notInstalled ? t('mm.notInstalled') : t('mm.startFailed'));
       }
     } catch {
@@ -823,15 +828,18 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
                     placeholder="http://localhost:11434" />
                 </label>
                 <div className="model-mgr">
-                  {ollamaUp === false && (
-                    <div className="mm-noollama">
-                      <div className="mm-noollama-t">{t('mm.noOllama')}</div>
-                      <div className="mm-noollama-b">
-                        <button className="mm-recheck" onClick={startOllama} disabled={starting}>{starting ? t('mm.starting') : t('mm.startOllama')}</button>
-                        {notInstalled && <button className="mm-install" onClick={installOllama}>{t('mm.install')}</button>}
-                      </div>
-                    </div>
-                  )}
+                  <div className={`mm-status ${ollamaUp === true ? 'ok' : ollamaInstalled === false ? 'none' : ollamaUp === false ? 'off' : ''}`}>
+                    <span>{ollamaUp === null ? t('mm.checking')
+                      : ollamaUp === true ? `✓ ${t('mm.statusOn')}`
+                      : ollamaInstalled === false ? t('mm.statusNone')
+                      : t('mm.statusOff')}</span>
+                    {ollamaUp === false && ollamaInstalled !== false && (
+                      <button className="mm-recheck" onClick={startOllama} disabled={starting}>{starting ? t('mm.starting') : t('mm.startOllama')}</button>
+                    )}
+                    {ollamaUp === false && ollamaInstalled === false && (
+                      <button className="mm-install" onClick={installOllama}>{t('mm.install')}</button>
+                    )}
+                  </div>
                   <div className="mm-head">
                     <span>{t('mm.installed')}</span>
                     {ollamaUp === true && <button className="mm-refresh" onClick={refreshModels} title={t('mm.refresh')}>↻</button>}

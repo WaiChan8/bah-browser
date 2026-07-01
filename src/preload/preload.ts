@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── Gerenciador de modelos Ollama (modo local) ──
   ollamaList: (baseUrl?: string) => ipcRenderer.invoke('ollama:list', baseUrl),
   ollamaEnsureRunning: (baseUrl?: string) => ipcRenderer.invoke('ollama:ensure-running', baseUrl),
+  ollamaStatus: (baseUrl?: string) => ipcRenderer.invoke('ollama:status', baseUrl),
   ollamaPull: (model: string, baseUrl?: string) => ipcRenderer.invoke('ollama:pull', model, baseUrl),
   ollamaPullCancel: () => ipcRenderer.invoke('ollama:pull-cancel'),
   ollamaDelete: (model: string, baseUrl?: string) => ipcRenderer.invoke('ollama:delete', model, baseUrl),

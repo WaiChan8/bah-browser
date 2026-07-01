@@ -840,6 +840,15 @@ function setupIPC(): void {
       return { ok: r.ok, error: r.ok ? undefined : `status ${r.status}` };
     } catch (e: any) { return { ok: false, error: String(e?.message ?? e) }; }
   });
+  // Estado do Ollama pra UI: rodando? instalado? (instalado = responde OU o .exe existe no caminho padrão).
+  ipcMain.handle('ollama:status', async (_e, baseUrl?: string) => {
+    const base = ollamaUrl(baseUrl);
+    let running = false;
+    try { running = (await fetch(`${base}/api/tags`)).ok; } catch {}
+    const localApp = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Ollama', 'ollama.exe') : '';
+    const installed = running || !!(localApp && fs.existsSync(localApp));
+    return { running, installed };
+  });
   // Garante o Ollama RODANDO: se já responde, ok; senão tenta SUBIR sozinho
   // (`ollama serve`) e espera ele responder. Assim o usuário não precisa abrir o app
   // na mão. Se nem o executável existir (ENOENT) → não instalado.
