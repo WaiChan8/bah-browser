@@ -789,10 +789,6 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                   <span className="menu-ic">{googleLoggedIn ? '✓' : '🔑'}</span>
                   <span className={`menu-label${googleLoggedIn ? ' connected' : ''}`}>{googleLoggedIn ? t('menu.googleConnected') : t('menu.googleLogin')}</span>
                 </button>
-                <button className="menu-item" onClick={() => { setMenuOpen(false); const u = store.activeTab?.url; if (u && /^https?:\/\//i.test(u)) (window as any).electronAPI?.openExternal?.(u); }} title={t('menu.openSystemTitle')}>
-                  <span className="menu-ic">🌐</span>
-                  <span className="menu-label">{t('menu.openSystem')}</span>
-                </button>
                 <div className="menu-sep" />
                 <div className="menu-section-title">
                   <span>⭐ {t('menu.favorites')}</span>
