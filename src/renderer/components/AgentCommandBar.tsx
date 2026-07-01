@@ -917,9 +917,10 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
           <button className="save-settings"
             disabled={JSON.stringify(settings) === JSON.stringify(aiSettings) && JSON.stringify(localCfg) === JSON.stringify(localSettings)}
             onClick={async () => {
+            // Salva e MANTÉM o painel aberto (não fecha) — assim o "Desativar IA Local"
+            // aparece na hora e a pessoa vê que aplicou. Fecha só pela engrenagem/✕.
             await onSettingsChange(settings);
             await onLocalSettingsChange(localCfg);
-            setShowSettings(false);
           }}>
             {t('settings.save')}
           </button>
