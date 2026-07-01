@@ -205,6 +205,8 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
   // Qual aba de config está aberta (nuvem/local) — SEPARADO de "local ativo". Abrir a aba local
   // só mostra os modelos pra escolher; o local só liga quando você seleciona um modelo.
   const [localView, setLocalView] = useState(localSettings.enabled);
+  const [thinkIdx, setThinkIdx] = useState(0);   // frase de "pensando" que cicla no loading do chat
+  const thinkPhrases = t('think.phrases').split('|');
   // Ao ABRIR as Configurações, sincroniza o rascunho com o que está salvo → abre sempre limpo
   // (Salvar apagado), sem arrastar uma mudança não-salva de uma abertura anterior.
   useEffect(() => {
@@ -262,6 +264,15 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
     const el = feedRef.current;
     if (el && stickToBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [feed, chatLoading]);
+
+  // Enquanto espera a resposta do chat, cicla as frases de "pensando" (efeito de IA processando)
+  // — mantém a pessoa olhando a tela enquanto o tempo passa. Para quando a resposta chega.
+  useEffect(() => {
+    if (!chatLoading) return;
+    setThinkIdx(0);
+    const id = setInterval(() => setThinkIdx(i => i + 1), 1600);
+    return () => clearInterval(id);
+  }, [chatLoading]);
   const onFeedScroll = () => {
     const el = feedRef.current;
     if (!el) return;
@@ -953,7 +964,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
         )}
         {feed.map(item => <FeedRow key={item.id} item={item} onContinue={handleContinueAfterManualHelp} helpActive={!!manualHelp} onConfirmRisky={handleConfirmRisky} confirmActive={!!pendingConfirm} onRunSuggestion={(cmd) => { pendingSuggestionRef.current = null; if (!loading && !chatLoading) runAgent(cmd); }} onOpenUrl={onOpenUrl} onSwitchToCloud={onSwitchToCloud} />)}
         {chatLoading && convoTabRef.current === activeTabId && (
-          <div className="chat-msg assistant"><div className="chat-ai-label">{activeAiLabel()}</div><div className="msg-content typing"><span /><span /><span /></div></div>
+          <div className="chat-msg assistant"><div className="chat-ai-label">{activeAiLabel()}</div><div className="msg-content thinking-line">{thinkPhrases[thinkIdx % thinkPhrases.length] || '…'}</div></div>
         )}
         {loading && convoTabRef.current === activeTabId && (
           <div className="feed-working"><span className="agent-spinner" /> <span className="feed-working-ai">{activeAiLabel()}</span> · {t('feed.working')}</div>
