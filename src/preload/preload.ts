@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   googleLogin: () => ipcRenderer.invoke('google:login'),
   googleCheckLogin: () => ipcRenderer.invoke('google:check-login'),
   clearGoogleCookies: () => ipcRenderer.invoke('cookies:clear-google'),
+  preconnect: (url: string) => ipcRenderer.invoke('net:preconnect', url),
   // Cron-Agent: monitores em background
   monitorsList: () => ipcRenderer.invoke('monitors:list'),
   monitorAdd: (data: { url: string; condition: string; intervalMin: number }) => ipcRenderer.invoke('monitors:add', data),

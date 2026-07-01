@@ -300,6 +300,9 @@ export class AIEngine {
     this.cloudModel = (cloudModel || '').trim();
   }
 
+  // Endpoint ativo (pro pré-aquecimento de conexão no boot/troca de provedor).
+  getBaseUrl(): string { return this.baseUrl; }
+
   private defaultBaseUrl(provider: AIProvider): string {
     switch (provider) {
       case 'anthropic': return 'https://api.anthropic.com';

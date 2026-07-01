@@ -93,6 +93,16 @@ let tray: Tray | null = null;
 let minimizeToTray = false;   // fechar a janela manda pra bandeja em vez de sair (opção do usuário)
 let isQuitting = false;       // "Sair" de verdade (bandeja / before-quit) libera o fechamento
 
+// Aquece DNS+TLS do provedor de IA ativo (pool keep-alive do fetch do Node) — a 1ª
+// mensagem deixa de pagar o handshake frio (~1-2s). Fire-and-forget, nunca quebra nada.
+function warmAiConnection(): void {
+  try {
+    const base = aiEngine?.getBaseUrl?.();
+    if (!base || !/^https:/i.test(base)) return;   // local (http) não precisa
+    fetch(base, { method: 'HEAD', signal: AbortSignal.timeout(5000) }).catch(() => {});
+  } catch {}
+}
+
 function trayIconPath(): string {
   return app.isPackaged
     ? path.join(process.resourcesPath, 'icon.png')
@@ -534,6 +544,7 @@ function createWindow(): void {
     frame: false,
     titleBarStyle: 'hidden',
     autoHideMenuBar: true,
+    show: false,   // só mostra no ready-to-show → abre já pintada, sem flash/janela vazia
     backgroundColor: '#0d0d12',
     // Em DEV (rodando pelo .bat), seta o ícone da janela/barra de tarefas pro logo novo.
     // No app EMPACOTADO o executável já leva o ícone (electron-builder), e build/ não é
@@ -557,6 +568,8 @@ function createWindow(): void {
   });
   mainWindow.webContents.session.setPermissionCheckHandler((wc, permission) =>
     permission === 'media' ? wc === mainWindow?.webContents : true);
+
+  mainWindow.once('ready-to-show', () => { try { mainWindow?.show(); } catch {} });
 
   const rendererPath = path.join(__dirname, '..', 'renderer', 'index.html');
   const isDev = !app.isPackaged && !require('fs').existsSync(rendererPath);
@@ -771,6 +784,7 @@ function setupIPC(): void {
       ? new AIEngine(provider, apiKey, baseUrl, undefined, model)
       : new AIEngine('pollinations', '');
     pageAgent = new PageAgent(aiEngine);
+    warmAiConnection();
     return { success: true };
   });
 
@@ -1463,6 +1477,16 @@ function setupIPC(): void {
     } catch (e: any) {
       return { ok: false, error: String(e?.message || e) };
     }
+  });
+
+  // Preconnect preditivo (estilo Chrome): quando o autocomplete da barra completa um
+  // domínio, abrimos o socket ANTES do Enter — a navegação já encontra a conexão pronta.
+  ipcMain.handle('net:preconnect', (_e, url: string) => {
+    try {
+      if (!/^https?:\/\//i.test(url)) return false;
+      session.fromPartition(BROWSER_PARTITION).preconnect({ url, numSockets: 1 });
+      return true;
+    } catch { return false; }
   });
 
   // ═══ Cron-Agent: monitores em background ═══
@@ -2351,6 +2375,7 @@ app.whenReady().then(() => {
   // The user can switch to DeepSeek/Mistral/NVIDIA with a key in settings for full power.
   aiEngine = new AIEngine('pollinations', '');
   pageAgent = new PageAgent(aiEngine);
+  warmAiConnection();   // 1ª mensagem sem TLS frio (o set-provider do renderer re-aquece se trocar)
 
   // Cron-Agent: carrega os monitores salvos e re-agenda. Usa o motor de nuvem ativo
   // (Pollinations keyless por padrão) pra avaliar a condição. A bandeja é opcional (flag).

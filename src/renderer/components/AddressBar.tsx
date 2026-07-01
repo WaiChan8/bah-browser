@@ -31,6 +31,21 @@ export default function AddressBar({
   const queryRef = useRef('');                                          // query atual (descarta resposta velha)
   const localRef = useRef<Array<{ url: string; title: string; display: string; prefix: boolean; search?: boolean }>>([]);
   const focusSelectRef = useRef(false);   // 1º clique na barra seleciona TUDO (estilo Chrome)
+  const preconnectRef = useRef<Map<string, number>>(new Map());   // host → ts (dedupe 60s)
+
+  // Preconnect preditivo: quando o inline-complete crava um site conhecido, já abre o
+  // socket (DNS+TLS) ANTES do Enter — a navegação encontra a conexão pronta (estilo Chrome).
+  const maybePreconnect = (rawUrl: string) => {
+    try {
+      const u = /^https?:\/\//i.test(rawUrl) ? rawUrl : 'https://' + rawUrl;
+      const host = new URL(u).host;
+      if (!host) return;
+      const last = preconnectRef.current.get(host) || 0;
+      if (Date.now() - last < 60000) return;
+      preconnectRef.current.set(host, Date.now());
+      (window as any).electronAPI?.preconnect?.(u);
+    } catch {}
+  };
 
   useEffect(() => {
     // NÃO sobrescreve o que a pessoa está digitando: só sincroniza a URL quando a barra
@@ -81,6 +96,7 @@ export default function AddressBar({
       setInput(completed);
       selRef.current = { s: val.length, e: completed.length };
       setSugg(list); setShowSugg(list.length > 0); setHi(0);
+      maybePreconnect(top.url);   // Enter provável → socket já aberto
     } else {
       setInput(val);
       setSugg(list); setShowSugg(list.length > 0); setHi(!deleting && top && top.prefix ? 0 : -1);
