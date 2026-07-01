@@ -83,6 +83,10 @@ let aiEngine: AIEngine;
 let pageAgent: PageAgent;
 let localEngine: AIEngine | null = null;
 let localPageAgent: PageAgent | null = null;
+// Espelho do modo IA Local do renderer (store.localSettings.enabled). O main precisa saber
+// pra trabalhos em BACKGROUND (monitores) respeitarem "local não vaza pra nuvem" — o chat
+// normal roteia por chamada, mas os monitores rodam sem o renderer decidir.
+let localModeOn = false;
 // Cron-Agent (monitores em background) + bandeja do sistema.
 let monitorManager: MonitorManager | null = null;
 let tray: Tray | null = null;
@@ -788,6 +792,9 @@ function setupIPC(): void {
     localEngine.warmupOllama().catch(() => {});
     return { success: true };
   });
+
+  // Espelha o liga/desliga do modo IA Local (pros trabalhos em background respeitarem).
+  ipcMain.handle('ai:set-local-enabled', (_event, enabled: boolean) => { localModeOn = !!enabled; return true; });
 
   // AI chat — general conversation / page Q&A
   ipcMain.handle('ai:chat', async (_event, message: string, pageContent?: string, stateless?: boolean, local?: boolean, tabId?: string, rawContext?: string) => {
@@ -1933,7 +1940,19 @@ function saveAdblockPref(on: boolean): void {
 let blocker: ElectronBlocker | null = null;
 async function setupAdblock(): Promise<void> {
   try {
-    blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch as any);
+    // Cache do motor em disco: boot instantâneo e adblock funcionando MESMO OFFLINE
+    // (antes, cada boot baixava da CDN — sem internet a sessão ficava sem adblock).
+    // Renova da rede quando o cache passa de 7 dias (listas frescas).
+    const cachePath = path.join(app.getPath('userData'), 'adblock-engine.bin');
+    try {
+      const age = Date.now() - fs.statSync(cachePath).mtimeMs;
+      if (age > 7 * 24 * 60 * 60 * 1000) fs.unlinkSync(cachePath);
+    } catch {}
+    blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch as any, {
+      path: cachePath,
+      read: fs.promises.readFile,
+      write: fs.promises.writeFile,
+    });
     const persistSession = session.fromPartition('persist:browser');
     // Respeita a preferência salva: só liga se o usuário não tiver desligado.
     if (loadAdblockPref()) blocker.enableBlockingInSession(persistSession);
@@ -2340,9 +2359,18 @@ app.whenReady().then(() => {
   monitorManager = new MonitorManager(
     app.getPath('userData'),
     BROWSER_PARTITION,
-    (prompt) => aiEngine.chat(prompt, undefined, true),
+    // Respeita o modo IA Local ("local não vaza pra nuvem"): com local ligado, avalia no
+    // Ollama; se ele não responder, o monitor marca erro — NUNCA cai pra nuvem sozinho.
+    (prompt) => {
+      if (localModeOn) {
+        if (localEngine) return localEngine.chat(prompt, undefined, true);
+        return Promise.reject(new Error('Local AI unavailable'));
+      }
+      return aiEngine.chat(prompt, undefined, true);
+    },
     (m) => { try { mainWindow?.webContents.send('monitor:alert', { id: m.id, condition: m.condition, value: m.lastValue || '', url: m.url }); } catch {} },
     () => { try { mainWindow?.webContents.send('monitors:changed', monitorManager?.list() || []); } catch {} },
+    (url) => { showMainWindow(); try { mainWindow?.webContents.send('open-new-tab', url); } catch {} },
   );
   monitorManager.armAll();
   if (minimizeToTray) ensureTray();

@@ -56,6 +56,7 @@ declare global {
       setUILanguage?: (lang: string) => Promise<any>;
       onZoom?: (cb: (pct: number) => void) => void;
       setLocalProvider?: (provider: string, apiKey: string, baseUrl?: string, modelName?: string) => Promise<any>;
+      setLocalEnabled?: (enabled: boolean) => Promise<boolean>;
       aiChat: (message: string, pageContent?: string, stateless?: boolean, local?: boolean, tabId?: string, rawContext?: string) => Promise<{ response?: string; error?: string }>;
       clearChatHistory?: (tabId?: string) => Promise<any>;
       aiAction: (command: string, pageContent?: string, screenshot?: string, tier?: 'local' | 'flash' | 'pro') => Promise<any>;
@@ -447,6 +448,10 @@ export default function App() {
   const goBack = useCallback(() => { getActiveWebview()?.goBack(); }, [getActiveWebview]);
   const goForward = useCallback(() => { getActiveWebview()?.goForward(); }, [getActiveWebview]);
   const reload = useCallback(() => { getActiveWebview()?.reload(); }, [getActiveWebview]);
+
+  // Espelha o liga/desliga do modo IA Local pro MAIN (boot + toda mudança): trabalhos em
+  // background (monitores) precisam respeitar "local não vaza pra nuvem" sem o renderer.
+  useEffect(() => { window.electronAPI?.setLocalEnabled?.(store.localSettings.enabled); }, [store.localSettings.enabled]);
 
   // ── Buscar na página (Ctrl+F) — usa o findInPage nativo do webview ──
   const [findOpen, setFindOpen] = useState(false);

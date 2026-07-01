@@ -38,6 +38,7 @@ export class MonitorManager {
     private askAI: AskAI,
     private notifyFn: (m: Monitor) => void,   // disparo (som/banner no renderer) além da notificação nativa
     private onChange: () => void,             // empurra a lista atualizada pro renderer
+    private openUrl?: (url: string) => void,  // clique na notificação → abre o Bah na página
   ) {
     this.file = path.join(userDataPath, 'monitors.json');
     this.load();
@@ -148,8 +149,13 @@ export class MonitorManager {
         show: false,
         width: 1280,
         height: 900,
-        webPreferences: { partition: this.partition, backgroundThrottling: false },
+        // images:false → só precisamos do TEXTO; checagem bem mais leve (banda/CPU).
+        webPreferences: { partition: this.partition, backgroundThrottling: false, images: false },
       });
+      // Blindagem da janela invisível: página monitorada não pode abrir popup visível
+      // nem tocar áudio "fantasma" durante a checagem.
+      win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+      win.webContents.setAudioMuted(true);
       const finish = (fn: () => void) => {
         if (settled) return;
         settled = true;
@@ -205,6 +211,8 @@ export class MonitorManager {
         title: 'Bah — monitor',
         body: `${m.condition}${m.lastValue ? '\n' + m.lastValue : ''}`,
       });
+      // Clique na notificação → abre o Bah direto na página monitorada.
+      n.on('click', () => { try { this.openUrl?.(m.url); } catch {} });
       n.show();
     } catch {}
     try { this.notifyFn(m); } catch {}

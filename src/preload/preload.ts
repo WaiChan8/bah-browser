@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('ai:action', command, pageContent, screenshot, tier),
   setLocalProvider: (provider: string, apiKey: string, baseUrl?: string, modelName?: string) =>
     ipcRenderer.invoke('ai:set-local-provider', provider, apiKey, baseUrl, modelName),
+  setLocalEnabled: (enabled: boolean) => ipcRenderer.invoke('ai:set-local-enabled', enabled),
   // ── Gerenciador de modelos Ollama (modo local) ──
   ollamaList: (baseUrl?: string) => ipcRenderer.invoke('ollama:list', baseUrl),
   ollamaEnsureRunning: (baseUrl?: string) => ipcRenderer.invoke('ollama:ensure-running', baseUrl),
