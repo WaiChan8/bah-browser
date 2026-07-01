@@ -599,8 +599,16 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
       const st = await ollamaApi()?.ollamaStatus?.(localCfg.baseUrl);   // { running, installed }
       if (st) setOllamaInstalled(!!st.installed);
       const r = await ollamaApi()?.ollamaList?.(localCfg.baseUrl);
-      setOllamaUp(st ? !!st.running : !!r?.ok);
-      setModels(r?.ok ? (r.models || []) : []);
+      const running = st ? !!st.running : !!r?.ok;
+      setOllamaUp(running);
+      const list = r?.ok ? (r.models || []) : [];
+      setModels(list);
+      // Se o local está ATIVO num modelo que não existe mais (Ollama rodando + lista sem ele),
+      // desliga o local — o "IA ativa" para de mostrar um modelo fantasma e volta pra nuvem/grátis.
+      if (running && localSettings.enabled && localSettings.model && !list.some((m: any) => m.name === localSettings.model)) {
+        setLocalCfg(p => ({ ...p, enabled: false }));
+        onLocalSettingsChange({ ...localSettings, enabled: false });
+      }
     } catch { setOllamaUp(false); }
   };
   // Botão único "Ligar o Ollama": tenta SUBIR o Ollama (ensure-running sobe o `ollama serve`
@@ -701,7 +709,15 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
   const handleDeleteModel = async (name: string) => {
     // Exclui do disco de verdade (ollama delete) — pede confirmação pra não apagar por acidente.
     if (!window.confirm(t('mm.deleteConfirm', { name }))) return;
-    try { await ollamaApi()?.ollamaDelete?.(name, localCfg.baseUrl); refreshModels(); } catch {}
+    try {
+      await ollamaApi()?.ollamaDelete?.(name, localCfg.baseUrl);
+      // Se apagou o modelo que estava ATIVO, desliga o local (não deixa "IA ativa" num fantasma).
+      if (localSettings.enabled && localSettings.model === name) {
+        setLocalCfg(p => ({ ...p, enabled: false }));
+        onLocalSettingsChange({ ...localSettings, enabled: false });
+      }
+      refreshModels();
+    } catch {}
   };
   const handleImportGguf = async () => {
     if (!ggufPath.trim() || pulling) return;
