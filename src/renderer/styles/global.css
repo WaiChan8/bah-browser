@@ -505,20 +505,17 @@ body {
 .settings-panel select:focus,
 .settings-panel input:focus{border-color:var(--accent);}
 .save-settings {
-  height:34px;
-  background:var(--gradient);border:none;
+  height:36px;
+  background:var(--gradient);border:1px solid rgba(255,255,255,0.16);
   border-radius:var(--radius);color:#fff;
-  font-size:12px;font-weight:700;cursor:pointer;
+  font-size:12.5px;font-weight:700;cursor:pointer;
   transition:opacity 0.2s;letter-spacing:0.3px;
   font-family:inherit;
-  /* Fica colado no rodapé do painel rolável → sempre visível e clicável,
-     mesmo no modo IA Local (conteúdo longo). */
-  position:sticky;bottom:0;flex:none;
-  margin-top:4px;
-  box-shadow:0 -10px 14px -2px var(--bg-primary);
+  /* Rola junto com o conteúdo do painel (não fica preso no rodapé). */
+  flex:none;margin-top:8px;
 }
 .save-settings:hover:not(:disabled){opacity:0.88;}
-.save-settings:disabled{background:var(--bg-tertiary);color:var(--text-muted);cursor:default;box-shadow:none;}
+.save-settings:disabled{background:var(--bg-tertiary);border-color:var(--border);color:var(--text-muted);cursor:default;}
 
 /* CHAT */
 .chat-messages {
@@ -1644,7 +1641,7 @@ body {
 .mm-sugg-row { display:flex; align-items:flex-start; gap:6px; }
 .mm-tier { flex:0 0 auto; min-width:118px; font-size:10px; color:var(--text-muted); padding-top:3px; font-family:ui-monospace,monospace; }
 .mm-chips { display:flex; flex-wrap:wrap; gap:4px; }
-.mm-chip { border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); cursor:pointer; font-size:10.5px; padding:2px 8px; border-radius:999px; }
+.mm-chip { border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); cursor:pointer; font-size:10.5px; padding:3px 9px; border-radius:8px; }
 .mm-chip:hover { border-color:var(--accent); color:var(--text-primary); }
 .mm-imp { font-size:12px; color:var(--text-secondary); }
 .mm-imp summary { cursor:pointer; padding:4px 0; color:var(--text-secondary); font-weight:600; font-size:12px; }
