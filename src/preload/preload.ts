@@ -84,6 +84,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   googleLogin: () => ipcRenderer.invoke('google:login'),
   googleCheckLogin: () => ipcRenderer.invoke('google:check-login'),
   clearGoogleCookies: () => ipcRenderer.invoke('cookies:clear-google'),
+  // Cron-Agent: monitores em background
+  monitorsList: () => ipcRenderer.invoke('monitors:list'),
+  monitorAdd: (data: { url: string; condition: string; intervalMin: number }) => ipcRenderer.invoke('monitors:add', data),
+  monitorUpdate: (id: string, patch: any) => ipcRenderer.invoke('monitors:update', id, patch),
+  monitorRemove: (id: string) => ipcRenderer.invoke('monitors:remove', id),
+  monitorRunNow: (id: string) => ipcRenderer.invoke('monitors:run-now', id),
+  onMonitorsChanged: (cb: (list: any[]) => void) => {
+    const listener = (_e: any, list: any[]) => cb(list);
+    ipcRenderer.on('monitors:changed', listener);
+    return () => ipcRenderer.removeListener('monitors:changed', listener);
+  },
+  onMonitorAlert: (cb: (info: { id: string; condition: string; value: string; url: string }) => void) => {
+    const listener = (_e: any, info: any) => cb(info);
+    ipcRenderer.on('monitor:alert', listener);
+    return () => ipcRenderer.removeListener('monitor:alert', listener);
+  },
+  // Bandeja do sistema (fechar mantém rodando)
+  trayGet: () => ipcRenderer.invoke('tray:get'),
+  traySet: (enabled: boolean) => ipcRenderer.invoke('tray:set', enabled),
   // Atalhos de teclado estilo Chrome (vêm do menu/aceleradores no main).
   onShortcut: (cb: (action: string) => void) => {
     const listener = (_e: unknown, action: string) => cb(action);

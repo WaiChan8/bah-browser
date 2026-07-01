@@ -7,6 +7,7 @@ import AgentCommandBar, { AgentProgressEvent } from './components/AgentCommandBa
 import { classifyRisk, riskForAction, RiskInfo } from './risk';
 import { t, onLangChange, getLang, googleLocaleParams, bingLocale, uiLangName } from './i18n';
 import WebViewContainer from './components/WebViewContainer';
+import MonitorsPanel from './components/MonitorsPanel';
 import {
   BrowserAction,
   executeBrowserAction,
@@ -88,6 +89,15 @@ declare global {
       googleLogin?: () => Promise<{ ok: boolean; copied?: number; browser?: string; error?: string }>;
       googleCheckLogin?: () => Promise<{ loggedIn: boolean }>;
       clearGoogleCookies?: () => Promise<{ ok: boolean; cleared?: number; error?: string }>;
+      monitorsList?: () => Promise<any[]>;
+      monitorAdd?: (data: { url: string; condition: string; intervalMin: number }) => Promise<any>;
+      monitorUpdate?: (id: string, patch: any) => Promise<boolean>;
+      monitorRemove?: (id: string) => Promise<boolean>;
+      monitorRunNow?: (id: string) => Promise<boolean>;
+      onMonitorsChanged?: (cb: (list: any[]) => void) => () => void;
+      onMonitorAlert?: (cb: (info: { id: string; condition: string; value: string; url: string }) => void) => () => void;
+      trayGet?: () => Promise<{ enabled: boolean }>;
+      traySet?: (enabled: boolean) => Promise<{ enabled: boolean }>;
       onShortcut?: (cb: (action: string) => void) => (() => void) | void;
       dismissOverlays?: (wcId: number) => Promise<{ dismissed: string }>;
       pickDocument?: () => Promise<{ ok: boolean; name?: string; text?: string; error?: string } | null>;
@@ -340,6 +350,7 @@ export default function App() {
   // ── Downloads (painel Ctrl+J) ──
   const [downloads, setDownloads] = useState<Array<{ id?: string; filename: string; path?: string; url?: string; state: string; bytes?: number; totalBytes?: number; speedBps?: number; etaSec?: number; paused?: boolean }>>([]);
   const [downloadsOpen, setDownloadsOpen] = useState(false);
+  const [monitorsOpen, setMonitorsOpen] = useState(false);
   // Badge de zoom flutuante (estilo Chrome: "120%" aparece e some), pra teclado e roda.
   const [zoomBadge, setZoomBadge] = useState<number | null>(null);
   const zoomBadgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -464,6 +475,29 @@ export default function App() {
     // Recarrega numa base limpa do Google → sem os cookies quebrados, a tela some.
     try { (getActiveWebview() as any)?.loadURL('https://www.google.com/'); } catch {}
   }, [getActiveWebview]);
+
+  // Cron-Agent: quando um monitor bate a condição, toca um som curto (além da notificação
+  // nativa do sistema, disparada no main) pra chamar a atenção mesmo minimizado.
+  useEffect(() => {
+    const off = window.electronAPI?.onMonitorAlert?.(() => {
+      try {
+        const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+        const ctx = new AC();
+        const beep = (freq: number, at: number) => {
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sine'; o.frequency.value = freq;
+          g.gain.setValueAtTime(0.0001, ctx.currentTime + at);
+          g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + at + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.35);
+          o.start(ctx.currentTime + at); o.stop(ctx.currentTime + at + 0.36);
+        };
+        beep(880, 0); beep(1174, 0.18);   // dois toques (dó-mi agudo)
+        setTimeout(() => { try { ctx.close(); } catch {} }, 900);
+      } catch {}
+    });
+    return () => { try { off?.(); } catch {} };
+  }, []);
   const runFind = useCallback((text: string, opts?: { findNext?: boolean; forward?: boolean }) => {
     const wv = getActiveWebview() as any;
     if (!wv) return;
@@ -801,6 +835,10 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                   <span className="menu-ic">{googleLoggedIn ? '✓' : '🔑'}</span>
                   <span className={`menu-label${googleLoggedIn ? ' connected' : ''}`}>{googleLoggedIn ? t('menu.googleConnected') : t('menu.googleLogin')}</span>
                 </button>
+                <button className="menu-item" onClick={() => { setMenuOpen(false); setMonitorsOpen(true); }} title={t('mon.menuTitle')}>
+                  <span className="menu-ic">🛰️</span>
+                  <span className="menu-label">{t('mon.title')}</span>
+                </button>
                 <div className="menu-sep" />
                 <div className="menu-section-title">
                   <span>⭐ {t('menu.favorites')}</span>
@@ -822,6 +860,12 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                   </div>
                 )}
               </div>
+            </>
+          )}
+          {monitorsOpen && (
+            <>
+              <div className="menu-overlay" onClick={() => setMonitorsOpen(false)} />
+              <MonitorsPanel onClose={() => setMonitorsOpen(false)} />
             </>
           )}
         </div>

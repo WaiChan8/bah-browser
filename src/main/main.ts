@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session, Menu, clipboard, webContents, shell, dialog, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, session, Menu, clipboard, webContents, shell, dialog, safeStorage, Notification, Tray, nativeImage } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { ElectronBlocker } from '@ghostery/adblocker-electron';
 import fetch from 'cross-fetch';
@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { AIEngine, AIProvider, setEngineLang } from './ai-engine';
 import { PageAgent } from './page-agent';
+import { MonitorManager } from './monitor-manager';
 import { downloadVideo, resolveTopVideo, resolveTopVideos, resolveTopNVideos } from './media-downloader';
 import { searchVideoCuts } from './video-cuts';
 import { fetchTranscript } from './transcript';
@@ -41,6 +42,7 @@ const MAIN_STRINGS: Record<'en' | 'pt' | 'es', Record<string, string>> = {
     'upd.title': 'Update available', 'upd.restart': 'Restart now', 'upd.later': 'Later',
     'upd.message': 'A new version ({v}) has been downloaded.',
     'upd.detail': 'Restart to finish updating. Your settings and login are kept.',
+    'tray.open': 'Open Bah', 'tray.quit': 'Quit', 'tray.tooltip': 'Bah — monitors running',
   },
   pt: {
     'ctx.copy': 'Copiar', 'ctx.cut': 'Recortar', 'ctx.paste': 'Colar', 'ctx.selectAll': 'Selecionar tudo',
@@ -53,6 +55,7 @@ const MAIN_STRINGS: Record<'en' | 'pt' | 'es', Record<string, string>> = {
     'upd.title': 'Atualização disponível', 'upd.restart': 'Reiniciar agora', 'upd.later': 'Depois',
     'upd.message': 'Uma nova versão ({v}) foi baixada.',
     'upd.detail': 'Reinicie para concluir a atualização. Suas configurações e login são mantidos.',
+    'tray.open': 'Abrir Bah', 'tray.quit': 'Sair', 'tray.tooltip': 'Bah — monitores rodando',
   },
   es: {
     'ctx.copy': 'Copiar', 'ctx.cut': 'Cortar', 'ctx.paste': 'Pegar', 'ctx.selectAll': 'Seleccionar todo',
@@ -65,6 +68,7 @@ const MAIN_STRINGS: Record<'en' | 'pt' | 'es', Record<string, string>> = {
     'upd.title': 'Actualización disponible', 'upd.restart': 'Reiniciar ahora', 'upd.later': 'Después',
     'upd.message': 'Se ha descargado una nueva versión ({v}).',
     'upd.detail': 'Reinicia para completar la actualización. Tus ajustes y sesión se mantienen.',
+    'tray.open': 'Abrir Bah', 'tray.quit': 'Salir', 'tray.tooltip': 'Bah — monitores activos',
   },
 };
 function mt(key: string, vars?: Record<string, string>): string {
@@ -79,6 +83,38 @@ let aiEngine: AIEngine;
 let pageAgent: PageAgent;
 let localEngine: AIEngine | null = null;
 let localPageAgent: PageAgent | null = null;
+// Cron-Agent (monitores em background) + bandeja do sistema.
+let monitorManager: MonitorManager | null = null;
+let tray: Tray | null = null;
+let minimizeToTray = false;   // fechar a janela manda pra bandeja em vez de sair (opção do usuário)
+let isQuitting = false;       // "Sair" de verdade (bandeja / before-quit) libera o fechamento
+
+function trayIconPath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.join(__dirname, '..', '..', 'build', 'icon.png');
+}
+function showMainWindow() {
+  if (!mainWindow) { createWindow(); return; }
+  try { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); } catch {}
+}
+function ensureTray() {
+  if (tray) return;
+  try {
+    let img = nativeImage.createFromPath(trayIconPath());
+    if (!img.isEmpty()) img = img.resize({ width: 16, height: 16 });
+    tray = new Tray(img);
+    tray.setToolTip(mt('tray.tooltip'));
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: mt('tray.open'), click: () => showMainWindow() },
+      { type: 'separator' },
+      { label: mt('tray.quit'), click: () => { isQuitting = true; if (mainWindow) { try { mainWindow.close(); } catch {} } else app.quit(); } },
+    ]));
+    tray.on('click', () => showMainWindow());
+    tray.on('double-click', () => showMainWindow());
+  } catch (e) { console.warn('[tray] create failed', e); tray = null; }
+}
+function destroyTray() { try { tray?.destroy(); } catch {} tray = null; }
 // Escudo de popup: timestamps de novas abas por webContents (anti-bombardeio).
 const popupTimes = new Map<number, number[]>();
 
@@ -531,6 +567,13 @@ function createWindow(): void {
   // DESLOGADO (pior quando aberto pelo .bat, que desliga abrupto). Agora é confiável.
   let cookiesFlushedOnClose = false;
   mainWindow.on('close', (e) => {
+    // Minimizar pra bandeja: se ligado e não é um "Sair" de verdade, esconde a janela em vez
+    // de fechar → os monitores em background seguem rodando. Só se a bandeja existir (senão
+    // ficaria sem como reabrir), caindo pro fechamento normal.
+    if (minimizeToTray && !isQuitting) {
+      ensureTray();
+      if (tray) { e.preventDefault(); try { mainWindow?.hide(); } catch {} return; }
+    }
     if (cookiesFlushedOnClose) return;   // 2ª passada: deixa fechar de verdade
     e.preventDefault();
     (async () => {
@@ -1414,6 +1457,21 @@ function setupIPC(): void {
     }
   });
 
+  // ═══ Cron-Agent: monitores em background ═══
+  ipcMain.handle('monitors:list', () => monitorManager?.list() || []);
+  ipcMain.handle('monitors:add', (_e, data: { url: string; condition: string; intervalMin: number }) => monitorManager?.add(data));
+  ipcMain.handle('monitors:update', (_e, id: string, patch: any) => { monitorManager?.update(id, patch); return true; });
+  ipcMain.handle('monitors:remove', (_e, id: string) => { monitorManager?.remove(id); return true; });
+  ipcMain.handle('monitors:run-now', async (_e, id: string) => { try { await monitorManager?.runNow(id); } catch {} return true; });
+  // Bandeja: fechar a janela mantém o Bah rodando (monitores seguem) em vez de sair.
+  ipcMain.handle('tray:get', () => ({ enabled: minimizeToTray }));
+  ipcMain.handle('tray:set', (_e, enabled: boolean) => {
+    minimizeToTray = !!enabled;
+    try { fs.writeFileSync(path.join(app.getPath('userData'), 'tray.flag'), minimizeToTray ? '1' : '0'); } catch {}
+    if (minimizeToTray) ensureTray(); else destroyTray();
+    return { enabled: minimizeToTray };
+  });
+
   // ═══ Porteiro de overlays: roda o dispensador de cookie/consent em TODOS os frames ═══
   // Só o processo principal alcança iframes de OUTRA ORIGEM (ex.: Sourcepoint da CNN/Guardian).
   // Tenta o frame principal primeiro (evita clicar dentro de iframe de anúncio). Retorna o
@@ -2274,6 +2332,21 @@ app.whenReady().then(() => {
   aiEngine = new AIEngine('pollinations', '');
   pageAgent = new PageAgent(aiEngine);
 
+  // Cron-Agent: carrega os monitores salvos e re-agenda. Usa o motor de nuvem ativo
+  // (Pollinations keyless por padrão) pra avaliar a condição. A bandeja é opcional (flag).
+  try {
+    minimizeToTray = fs.readFileSync(path.join(app.getPath('userData'), 'tray.flag'), 'utf8').trim() === '1';
+  } catch { minimizeToTray = false; }
+  monitorManager = new MonitorManager(
+    app.getPath('userData'),
+    BROWSER_PARTITION,
+    (prompt) => aiEngine.chat(prompt, undefined, true),
+    (m) => { try { mainWindow?.webContents.send('monitor:alert', { id: m.id, condition: m.condition, value: m.lastValue || '', url: m.url }); } catch {} },
+    () => { try { mainWindow?.webContents.send('monitors:changed', monitorManager?.list() || []); } catch {} },
+  );
+  monitorManager.armAll();
+  if (minimizeToTray) ensureTray();
+
 
   // Default local engine (Ollama on localhost — user configures model in settings)
   try {
@@ -2286,6 +2359,9 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => {
+  isQuitting = true;   // libera o close handler (não vai mais esconder na bandeja)
+  try { monitorManager?.disposeAll(); } catch {}
+  destroyTray();
   // Free the persistent OCR workers (≈40–80MB) cleanly on exit.
   import('./ocr-engine').then(m => m.terminateOcrWorkers()).catch(() => {});
 });
