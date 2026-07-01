@@ -221,6 +221,27 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('favorites.v1') || '[]'); } catch { return []; }
   });
 
+  // Painel do assistente redimensionável — arrastar a divisória pro lado (estilo Comet). Largura salva.
+  const [panelWidth, setPanelWidth] = useState<number>(() => { const s = parseInt(localStorage.getItem('panelWidth') || '', 10); return (s >= 390 && s <= 1200) ? s : 420; });
+  const [isResizing, setIsResizing] = useState(false);
+  const startPanelResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    const onMove = (ev: MouseEvent) => {
+      // painel na direita: quanto mais pra esquerda arrasta, mais largo. Deixa >=420px pro navegador.
+      const w = Math.min(Math.max(window.innerWidth - ev.clientX, 390), Math.max(390, window.innerWidth - 420));
+      setPanelWidth(w);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      setIsResizing(false);
+      setPanelWidth(w => { try { localStorage.setItem('panelWidth', String(w)); } catch {} return w; });
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
   useEffect(() => {
     window.electronAPI?.setAIProvider(store.aiSettings.provider, store.aiSettings.apiPaused ? '' : store.aiSettings.apiKey, store.aiSettings.baseUrl, store.aiSettings.model);
     window.electronAPI?.setUILanguage?.(getLang());   // i18n Fase 2: agente responde no idioma da UI
@@ -865,8 +886,12 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
           )}
         </div>
 
+        {store.sidebarOpen && (
+          <div className="panel-resize-handle" onMouseDown={startPanelResize} title={t('panel.resize')} />
+        )}
+        {isResizing && <div className="resize-overlay" />}
         {/* Kept mounted even when closed so a running task survives toggling the sidebar */}
-        <div className={`agent-side-panel-host ${store.sidebarOpen ? '' : 'collapsed'}`}>
+        <div className={`agent-side-panel-host ${store.sidebarOpen ? '' : 'collapsed'}`} style={store.sidebarOpen ? { width: panelWidth } : undefined}>
           <AgentCommandBar
             activeTabId={store.activeTabId}
             tabIds={store.tabs.map(t => t.id).join(',')}

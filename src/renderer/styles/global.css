@@ -438,6 +438,10 @@ body {
 
 /* MAIN CONTENT */
 .main-content{flex:1;display:flex;overflow:hidden;}
+.panel-resize-handle{flex:0 0 5px;cursor:ew-resize;background:transparent;position:relative;z-index:6;}
+.panel-resize-handle::after{content:'';position:absolute;top:0;bottom:0;left:1px;right:1px;border-radius:2px;background:transparent;transition:background .12s;}
+.panel-resize-handle:hover::after{background:var(--accent);}
+.resize-overlay{position:fixed;inset:0;z-index:9999;cursor:ew-resize;}
 /* Dark canvas behind webviews — kills the white flash before a page paints (demo!) */
 .webview-area{flex:1;overflow:hidden;position:relative;background:radial-gradient(circle at 50% 38%,var(--bg-secondary),var(--bg-primary) 70%);}
 .webview-container{width:100%;height:100%;position:relative;background:var(--bg-primary);}
