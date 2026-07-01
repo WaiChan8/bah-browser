@@ -490,10 +490,10 @@ body {
   /* No modo IA Local o conteúdo fica alto (lista + sugestões + import). Sem isto,
      o painel estoura e empurra o botão Salvar pra fora da tela. */
   max-height:calc(100vh - 110px);
-  overflow-y:auto;
-  /* Reserva o espaço da barra de rolagem sempre → não "pula" o layout quando ela
-     aparece/some ao alternar Nuvem/IA Local (conteúdo de alturas diferentes). */
-  scrollbar-gutter:stable;
+  /* overflow-y:SCROLL (não auto): a barrinha fina fica SEMPRE presente, então o
+     conteúdo não "pula" de largura quando ela apareceria/sumiria ao alternar
+     Nuvem/IA Local ou abrir/fechar as Config (conteúdo de alturas diferentes). */
+  overflow-y:scroll;
 }
 .settings-panel::-webkit-scrollbar{width:5px;}
 .settings-panel::-webkit-scrollbar-track{background:transparent;}
@@ -702,7 +702,7 @@ body {
 }
 /* Unified live activity feed (infinite scroll) */
 .agent-feed {
-  flex:1;overflow-y:auto;scrollbar-gutter:stable;
+  flex:1;overflow-y:scroll;
   padding:14px 14px 10px;
   display:flex;flex-direction:column;gap:7px;
   scroll-behavior:smooth;
