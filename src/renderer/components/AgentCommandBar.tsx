@@ -202,6 +202,9 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState(aiSettings);
   const [localCfg, setLocalCfg] = useState(localSettings);
+  // Qual aba de config está aberta (nuvem/local) — SEPARADO de "local ativo". Abrir a aba local
+  // só mostra os modelos pra escolher; o local só liga quando você seleciona um modelo.
+  const [localView, setLocalView] = useState(localSettings.enabled);
   // Gerenciador de modelos Ollama (instalar/baixar/apagar/importar pela UI).
   const [models, setModels] = useState<Array<{ name: string; sizeGB: number; params: string; quant: string }>>([]);
   const [pullName, setPullName] = useState('');
@@ -620,7 +623,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
     try { ollamaApi()?.openExternal?.(url); } catch {}
   };
   useEffect(() => {
-    if (!showSettings || !localCfg.enabled) return;
+    if (!showSettings || !localView) return;
     refreshModels();
     const off = ollamaApi()?.onOllamaPullProgress?.((p: any) => {
       if (p?.canceled) { setPullMsg('canceled'); setPulling(false); refreshModels(); return; }
@@ -630,7 +633,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
     });
     return typeof off === 'function' ? off : undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showSettings, localCfg.enabled, localCfg.baseUrl]);
+  }, [showSettings, localView, localCfg.baseUrl]);
   const handlePull = async () => {
     const m = pullName.trim(); if (!m || pulling) return;
     setPulling(true); setPullMsg('Preparing Ollama…');
@@ -722,17 +725,17 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
           <div className="mode-switch" role="tablist" aria-label="Where the AI runs">
             <button
               type="button"
-              className={`mode-opt ${!localCfg.enabled ? 'on' : ''}`}
-              onClick={() => { const next = { ...localCfg, enabled: false }; setLocalCfg(next); onLocalSettingsChange(next); setSettings(s => ({ ...s, provider: (s.provider === 'mistral' || s.provider === 'nvidia') ? s.provider : 'deepseek' })); }}
+              className={`mode-opt ${!localView ? 'on' : ''}`}
+              onClick={() => { setLocalView(false); const next = { ...localCfg, enabled: false }; setLocalCfg(next); onLocalSettingsChange(next); setSettings(s => ({ ...s, provider: (s.provider === 'mistral' || s.provider === 'nvidia') ? s.provider : 'deepseek' })); }}
             >☁️ {t('set.cloudMode')}<small>{t('set.cloudSmall')}</small></button>
             <button
               type="button"
-              className={`mode-opt ${localCfg.enabled ? 'on' : ''}`}
-              onClick={() => { const next = { ...localCfg, enabled: true }; setLocalCfg(next); onLocalSettingsChange(next); }}
+              className={`mode-opt ${localView ? 'on' : ''}`}
+              onClick={() => setLocalView(true)}
             >🏠 {t('set.localMode')}<small>{t('set.localSmall')}</small></button>
           </div>
           <div className="ai-active-line">{t('set.activeAi')}: <b>{activeAiLabel()}</b></div>
-          {!localCfg.enabled && (
+          {!localView && (
             <>
               <label>
                 {t('set.provider')}
@@ -790,12 +793,14 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
               </details>
             </>
           )}
-          {localCfg.enabled && (
+          {localView && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div className="mm-hint">💡 {t('set.localHint')}</div>
-              <button type="button" className="ai-pause-btn" onClick={() => { const next = { ...localCfg, enabled: false }; setLocalCfg(next); onLocalSettingsChange(next); }}>
-                ⏸ {t('set.pauseLocal')}
-              </button>
+              {localCfg.enabled && (
+                <button type="button" className="ai-pause-btn" onClick={() => { const next = { ...localCfg, enabled: false }; setLocalCfg(next); onLocalSettingsChange(next); }}>
+                  ⏸ {t('set.pauseLocal')}
+                </button>
+              )}
                 <label>
                   {t('set.ollamaUrl')}
                   <input type="text" value={localCfg.baseUrl}
@@ -822,7 +827,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
                     <div className="mm-list">
                       {models.map(m => (
                         <div key={m.name} className={`mm-item ${m.name === localCfg.model ? 'on' : ''}`}>
-                          <button className="mm-pick" onClick={() => setLocalCfg(p => ({ ...p, model: m.name }))} title={t('mm.use')}>
+                          <button className="mm-pick" onClick={() => { const next = { ...localCfg, model: m.name, enabled: true }; setLocalCfg(next); onLocalSettingsChange(next); }} title={t('mm.use')}>
                             <span className="mm-name">{m.name === localCfg.model ? '✓ ' : ''}{m.name}</span>
                             <span className="mm-meta">{[m.params, m.sizeGB ? `${m.sizeGB}GB` : ''].filter(Boolean).join(' · ')}</span>
                           </button>
