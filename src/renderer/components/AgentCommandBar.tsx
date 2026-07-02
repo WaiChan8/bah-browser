@@ -170,6 +170,10 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
   // ── Voz: microfone → transcrição LOCAL (Whisper via Transformers.js; sem nuvem/chave) ──
   const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'transcribing'>('idle');
   const voiceWorkerRef = useRef<Worker | null>(null);
+  // Watchdog da voz: se o worker travar (rede caiu no download do modelo, ONNX preso),
+  // o mic NÃO fica preso em "transcrevendo" — mata o worker e volta pro idle.
+  const voiceWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearVoiceWatchdog = () => { if (voiceWatchdogRef.current) { clearTimeout(voiceWatchdogRef.current); voiceWatchdogRef.current = null; } };
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -331,6 +335,10 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
         notifyDone(result.thought);
       }
       if (!result.error) setInput('');
+    } catch (e: any) {
+      // Erro inesperado do loop NÃO pode sumir mudo: mostra no feed (exceto cancelamento
+      // pelo botão Parar, que é intencional e já tem o próprio fluxo).
+      if (!abortController.signal.aborted) push({ kind: 'error', text: String(e?.message ?? e) });
     } finally {
       abortRef.current = null;
       setLoading(false);
@@ -491,10 +499,12 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
       w.onmessage = (e: MessageEvent) => {
         const d = e.data || {};
         if (d.type === 'result') {
+          clearVoiceWatchdog();
           const txt = String(d.text || '').trim();
           if (txt) setInput(prev => (prev ? prev.trimEnd() + ' ' : '') + txt);
           setVoiceState('idle');
         } else if (d.type === 'error') {
+          clearVoiceWatchdog();
           setVoiceState('idle');
           push({ kind: 'error', text: `Voice: ${d.error}` });
         }
@@ -546,6 +556,15 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
           setVoiceState('transcribing');
           const pcm = await blobToPcm16k(blob);
           ensureVoiceWorker().postMessage({ type: 'transcribe', audio: pcm, language: whisperLang() }, [pcm.buffer]);
+          // 120s cobre o 1º uso (download do modelo) numa rede lenta; depois disso, trava = reset.
+          clearVoiceWatchdog();
+          voiceWatchdogRef.current = setTimeout(() => {
+            voiceWatchdogRef.current = null;
+            try { voiceWorkerRef.current?.terminate(); } catch {}
+            voiceWorkerRef.current = null;   // próximo clique no mic recria o worker do zero
+            setVoiceState('idle');
+            push({ kind: 'error', text: t('composer.voiceTimeout') });
+          }, 120000);
         } catch (err: any) {
           setVoiceState('idle');
           const m = String(err?.message || err);

@@ -400,10 +400,15 @@ export async function waitForSettle(
   let lastCount = -1;
   let stableSince = 0;
   while (Date.now() - start < maxMs) {
-    let snap: { rs: string; n: number } | null = null;
-    try {
-      snap = await wv.executeJavaScript(`({ rs: document.readyState, n: document.getElementsByTagName('*').length })`, false);
-    } catch { return; }   // webview ocupado/trocou de página: não trava
+    // executeJavaScript numa página com o thread JS TRAVADO pode nunca resolver — o race
+    // de 1,5s garante que o settle respeita o maxMs em vez de pendurar o caminho quente.
+    const snap = await new Promise<{ rs: string; n: number } | null>(resolve => {
+      const t = setTimeout(() => resolve(null), 1500);
+      Promise.resolve(wv.executeJavaScript(`({ rs: document.readyState, n: document.getElementsByTagName('*').length })`, false)).then(
+        (r: any) => { clearTimeout(t); resolve(r ?? null); },
+        () => { clearTimeout(t); resolve(null); },   // webview ocupado/trocou de página: não trava
+      );
+    });
     if (!snap) return;
     if (snap.n === lastCount) {
       if (!stableSince) stableSince = Date.now();

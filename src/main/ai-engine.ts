@@ -38,12 +38,17 @@ async function readSseStream(res: Response, onDelta: (d: string) => void, holdba
     const target = Math.max(0, full.length - holdbackChars);
     if (target > emitted) { try { onDelta(full.slice(emitted, target)); } catch {} emitted = target; }
   };
+  let stallTimer: ReturnType<typeof setTimeout> | null = null;
   try {
     while (true) {
-      const chunk = await Promise.race([
-        reader.read(),
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('stream stalled (30s)')), 30000)),
-      ]) as { done: boolean; value?: Uint8Array };
+      // Timer limpo a CADA leitura (senão um stream longo acumula um timer de 30s por chunk).
+      const chunk = await new Promise<{ done: boolean; value?: Uint8Array }>((resolve, reject) => {
+        stallTimer = setTimeout(() => reject(new Error('stream stalled (30s)')), 30000);
+        Promise.resolve(reader.read()).then(
+          (r: any) => { if (stallTimer) clearTimeout(stallTimer); resolve(r); },
+          (e: any) => { if (stallTimer) clearTimeout(stallTimer); reject(e); },
+        );
+      });
       if (chunk.done) break;
       buf += decoder.decode(chunk.value, { stream: true });
       let nl: number;
@@ -60,7 +65,11 @@ async function readSseStream(res: Response, onDelta: (d: string) => void, holdba
         } catch { /* linha parcial/keep-alive — ignora */ }
       }
     }
+  } catch (e) {
+    try { await reader.cancel(); } catch {}   // fecha a conexão de verdade (não deixa o socket pendurado)
+    throw e;
   } finally {
+    if (stallTimer) clearTimeout(stallTimer);
     try { reader.releaseLock?.(); } catch {}
   }
   return full;
@@ -877,7 +886,7 @@ export class AIEngine {
   private async resolveOllama(): Promise<string> {
     if (this.resolvedOllamaModel) return this.resolvedOllamaModel;
     try {
-      const r = await fetch(`${this.baseUrl}/api/tags`);
+      const r = await fetchWithTimeout(`${this.baseUrl}/api/tags`, {}, 4000);
       const data: any = await r.json();
       const avail: string[] = (data?.models || []).map((x: any) => String(x.name));
       if (avail.length === 0) { this.resolvedOllamaModel = this.ollamaModel; return this.ollamaModel; }
@@ -904,11 +913,12 @@ export class AIEngine {
     try {
       const model = await this.resolveOllama();
       console.log(`[Ollama] aquecendo "${model}" na VRAM…`);
-      await fetch(`${this.baseUrl}/api/chat`, {
+      // 180s: carregar um modelo grande na VRAM demora mesmo; mas nunca pendura pra sempre.
+      await fetchWithTimeout(`${this.baseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, messages: [{ role: 'user', content: 'oi' }], stream: false, keep_alive: '30m', options: { num_ctx: 512 } }),
-      });
+      }, 180000);
       this.ollamaWarmed = true;
       console.log(`[Ollama] "${model}" pronto na VRAM.`);
     } catch (e: any) {

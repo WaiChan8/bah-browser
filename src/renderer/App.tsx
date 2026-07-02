@@ -1020,6 +1020,7 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
               const runLog = startAgentRun(command);
               const taskTabId = activeTabIdRef.current;   // aba de origem desta tarefa (não muda se o agente abrir abas)
               taskRunningRef.current = true;   // a partir daqui, trocas MANUAIS de aba não mexem na aba do agente
+              downloadEventsRef.current = [];  // downloads velhos (manuais/da tarefa anterior) não entram na história DESTA
               try {
               if (isTrashDestroyerCommand(command)) {
                 const wv = getActiveWebview();
