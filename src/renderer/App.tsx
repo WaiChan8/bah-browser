@@ -1318,9 +1318,12 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                 }
                 // QUICK INTENT: layperson media/file requests ("mp3 musica X", "baixe o
                 // pdf de Y") → execute the right action at step 0 WITHOUT calling the AI.
-                // localMode: no modo NUVEM (DeepSeek) o atalho determinístico de playlist
-                // NÃO intercepta — o modelo forte cura as músicas melhor. Só o local usa.
-                let quickAction = detectQuickAction(command, { forceImage: !!opts?.forceImage, localMode: store.localSettings.enabled });
+                // weakModel: o atalho determinístico de PLAYLIST só entra quando a IA ativa é
+                // FRACA — modo local (Ollama) OU nuvem keyless (Pollinations, o gpt-oss grátis).
+                // Só com uma chave de nuvem de verdade (DeepSeek etc.) é que cedemos pro modelo
+                // forte curar as músicas. Sem chave = keyless = fraco → precisa do atalho.
+                const weakModel = store.localSettings.enabled || !store.aiSettings.apiKey?.trim();
+                let quickAction = detectQuickAction(command, { forceImage: !!opts?.forceImage, weakModel });
                 // FOLLOW-UP sem IA: "e com a palavra bom dia?" / "agora com a frase X"
                 // reaproveita a intenção do pedido anterior trocando só o termo.
                 if (!quickAction && lastQuickActionRef.current) {

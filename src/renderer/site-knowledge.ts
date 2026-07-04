@@ -294,7 +294,7 @@ const QUALITY_RE = /\b(?:n[ao]|em|com|de|in)?\s*(?:(?:melhor|boa|alta|m[aá]xima
 // QUALITY_RE fica só pros .replace() (que precisam do /g e zeram lastIndex sozinhos).
 const QUALITY_TEST_RE = new RegExp(QUALITY_RE.source, 'i');
 
-export function detectQuickAction(command: string, opts?: { forceImage?: boolean; localMode?: boolean }): QuickAction | null {
+export function detectQuickAction(command: string, opts?: { forceImage?: boolean; weakModel?: boolean }): QuickAction | null {
   // MODO IMAGEM (caixinha do chat marcada): trata o texto INTEIRO como prompt de imagem,
   // sem depender de palavra-gatilho/idioma. Vem antes de tudo (até de URL) — marcou, é imagem.
   if (opts?.forceImage) {
@@ -308,12 +308,12 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
   if (commandHasExplicitUrl(command)) return null;
   let n = normalize(command);
 
-  // CRIAR PLAYLIST — atalho DETERMINÍSTICO **só no modo LOCAL** (modelo fraco tipo qwen3/
-  // gpt-oss falha em criar playlist → a "mão" resolve top-N e monta). No modo NUVEM
-  // (DeepSeek) NÃO intercepta: o modelo forte CURA as músicas de verdade (playlist melhor
-  // que uma busca top-N) — respeita [[local-nao-mexer-na-api]]. Em AMBOS os modos, um
-  // comando de criar playlist NUNCA cai no detector de download (retorna null → modelo).
-  // Precisa ficar no TOPO: "crie uma playlist e SALVE 10 MÚSICAS" tem 'salve'+'músicas'.
+  // CRIAR PLAYLIST — atalho DETERMINÍSTICO **só quando a IA é FRACA** (modo local Ollama
+  // OU nuvem keyless/Pollinations — o gpt-oss grátis falha em criar playlist e devolve JSON
+  // inválido → a "mão" resolve top-N e monta). Com CHAVE de nuvem forte (DeepSeek) NÃO
+  // intercepta: o modelo cura as músicas de verdade — respeita [[local-nao-mexer-na-api]].
+  // Em AMBOS os casos, um comando de criar playlist NUNCA cai no detector de download
+  // (retorna null → modelo). No TOPO: "crie uma playlist e SALVE 10 MÚSICAS" tem 'salve'.
   {
     const PL_NOUN = /\b(playlist|play\s?list|lista\s+de\s+(?:reproducao|reproduccion|musicas?|canciones))\b/;
     // Verbos de CRIAR. 'adicion/add' saíram (isso é mexer numa playlist existente). 'quero/
@@ -331,8 +331,9 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
     if (PL_NOUN.test(n) && PL_VERB.test(n)) {
       // Pergunta / abrir existente / adicionar → sempre pro modelo (nunca vira download).
       if (PL_QUESTION || PL_OPEN_EXISTING || PL_ADD_EXISTING) return null;
-      // Nuvem/API (DeepSeek): cede pro modelo curar as músicas. Só o LOCAL usa o atalho.
-      if (!opts?.localMode) return null;
+      // IA forte (nuvem com chave, DeepSeek): cede pro modelo curar. Fraca (local ou
+      // keyless): usa o atalho — senão o gpt-oss grátis falha o JSON e não cria nada.
+      if (!opts?.weakModel) return null;
       const sp1 = n.replace(/([a-z])(\d)/g, '$1 $2');
       const nRaw = parseCount(sp1);
       // Nome ("com o nome X", "chamada X") + privacidade → vão na PRÓPRIA action (o
