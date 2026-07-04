@@ -2267,11 +2267,11 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                     }
                     } // fim do else (não era "esse vídeo" da página atual)
                   } else if (action.type === 'create_playlist') {
-                    // Duas rotas, ambas determinísticas no fim:
-                    // (a) songs[] nomeadas (pelo MODELO ou pelo atalho com lista) → resolve cada uma;
-                    // (b) SÓ artista/tema+count (atalho 0-token) → top-N faixas numa busca única
-                    //     (resolveManyVideos, sem Shorts) — funciona igual com QUALQUER IA.
-                    // Depois: playlist por URL (watch_videos), toca na hora SEM login → auto-done.
+                    // Duas rotas de resolução:
+                    // (a) songs[] nomeadas (pelo MODELO forte, ou pelo atalho com lista de vírgulas);
+                    // (b) SÓ artista+count (atalho 0-token, SÓ no modo local — na nuvem o modelo cura).
+                    // Depois: CRIA a playlist de verdade na conta (salva) e toca; se não conseguir
+                    // salvar (ex.: não logado), o fallback só toca a fila temporária (watch_videos).
                     setAgentVisual('acting');
                     const songs = (action.songs || []).map(s => String(s).trim()).filter(Boolean).slice(0, 25);
                     const plArtist = String((action as any).artist || '').trim();
@@ -2299,9 +2299,6 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                     } else {
                         const plUrl = `https://www.youtube.com/watch_videos?video_ids=${ids.join(',')}`;
                         const beforeUrl = wv.getURL();
-                        await executeBrowserAction(wv, { type: 'navigate', url: plUrl } as BrowserAction);
-                        await waitForWebviewSettled(wv, beforeUrl);
-                        await forcePlayVideo(wv);   // já começa tocando a 1ª
                         // Nome + privacidade: da action (detector/modelo já extraiu limpo) ou do
                         // comando cru. Lookahead PARA em com/with/e/and/que — senão o nome viraria
                         // "Treino com 8 músicas do Eminem" (o rabo inteiro do comando).
@@ -2316,10 +2313,11 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                         const saveName = (rawName.charAt(0).toUpperCase() + rawName.slice(1)).slice(0, 60);
                         allResults.push({ action, result: { success: true, info: { count: ids.length, url: plUrl } } });
                         onProgress({ kind: 'status', message: `🎶 Creating the playlist "${saveName}"${wantPrivate ? ' (private)' : ''} in your YouTube account — adding ${ids.length} songs…` });
-                        // Cria a playlist COM o 1º vídeo (página watch limpa) e adiciona os demais
-                        // um a um (você vê o navegador montar a lista, música a música).
+                        // Cria a playlist COM o 1º vídeo (vai direto pra página watch limpa — sem o
+                        // round-trip antigo pela watch_videos, que só tocava 1s e cortava) e adiciona
+                        // os demais um a um (você vê o navegador montar a lista, música a música).
                         await executeBrowserAction(wv, { type: 'navigate', url: `https://www.youtube.com/watch?v=${ids[0]}` } as BrowserAction);
-                        await waitForWebviewSettled(wv, plUrl);
+                        await waitForWebviewSettled(wv, beforeUrl);
                         await new Promise(r => setTimeout(r, 1300));
                         const created = await trySaveNamedPlaylist(wv, saveName, wantPrivate);
                         if (created.ok) {
