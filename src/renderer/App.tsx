@@ -2288,11 +2288,34 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                       if (ids.length < 2) plFail = `Only found ${ids.length} video(s) of the ${songs.length} songs — cannot build the playlist.`;
                     } else if (plArtist.length >= 2) {
                       const wantN = Math.min(Math.max(Number((action as any).count) || 10, 2), 12);
-                      onProgress({ kind: 'status', message: `🎵 Building the playlist — top ${wantN} "${plArtist}" tracks on YouTube (skipping Shorts)…` });
-                      const rm = await window.electronAPI?.resolveManyVideos?.(plArtist, wantN);
-                      const vids = (rm?.ok && rm.videos) ? rm.videos : [];
+                      // CURADORIA sem depender do JSON de acao (que o gpt-oss erra): peco pro
+                      // modelo so LISTAR os titulos — tarefa de texto simples, confiavel ate no
+                      // modelo fraco (keyless Pollinations ou gpt-oss local, que sao o mesmo
+                      // modelo). Depois a "mao" resolve cada um no YouTube. Se a lista vier
+                      // vazia/ruim, FALLBACK = busca top-N do artista (sempre funciona).
+                      onProgress({ kind: 'status', message: `🎵 Picking ${wantN} "${plArtist}" songs…` });
+                      let vids: Array<{ id: string; title: string }> = [];
+                      try {
+                        const listPrompt = `List exactly ${wantN} well-known songs by ${plArtist}. Output ONLY the song titles, one per line — no numbering, no commentary, no extra text.`;
+                        const lr = await raceTimeout(window.electronAPI?.aiChat?.(listPrompt, '', true, store.localSettings.enabled) ?? Promise.resolve(undefined), 15000, undefined);
+                        const named = String((lr as any)?.response || '').split(/\n+/)
+                          .map(l => l.replace(/^\s*[-*•\d.)\]]+\s*/, '').replace(/^["'“”]|["'“”]$/g, '').trim())
+                          .filter(l => l.length >= 2 && l.length <= 80 && !/^(here|aqui|claro|sure|okay|sorry|these|of course|estas|essas)\b/i.test(l))
+                          .slice(0, wantN)
+                          .map(t => `${plArtist} ${t}`);
+                        if (named.length >= 2) {
+                          onProgress({ kind: 'status', message: `🎵 Finding ${named.length} songs on YouTube (skipping Shorts)…` });
+                          const resolved = (await window.electronAPI?.resolveVideos?.(named)) || [];
+                          vids = resolved.filter(r => r.id).map(r => ({ id: r.id as string, title: r.title || r.query || plArtist }));
+                        }
+                      } catch { /* cai no fallback abaixo */ }
+                      if (vids.length < 2) {
+                        onProgress({ kind: 'status', message: `🎵 Top ${wantN} "${plArtist}" tracks on YouTube…` });
+                        const rm = await window.electronAPI?.resolveManyVideos?.(plArtist, wantN);
+                        vids = (rm?.ok && rm.videos) ? rm.videos.map(v => ({ id: v.id, title: v.title || plArtist })) : [];
+                      }
                       ids = vids.map(v => v.id);
-                      if (ids.length < 2) plFail = (rm as any)?.error || `Couldn't find enough "${plArtist}" tracks on YouTube.`;
+                      if (ids.length < 2) plFail = `Couldn't find enough "${plArtist}" songs on YouTube.`;
                     } else {
                       plFail = 'I need at least 2 songs to build the playlist.';
                       history += '\nCREATE_PLAYLIST: poucas músicas. Reemita create_playlist com a lista de títulos (use seu conhecimento do artista).';
