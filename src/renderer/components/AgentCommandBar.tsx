@@ -40,7 +40,7 @@ interface ActionResult {
 type FeedData =
   | { kind: 'task'; text: string }
   | { kind: 'chat-user'; text: string; file?: string }
-  | { kind: 'chat-assistant'; text: string; suggestedCommand?: string; sources?: Array<{ title: string; url: string }>; localFailed?: boolean }
+  | { kind: 'chat-assistant'; text: string; suggestedCommand?: string; sources?: Array<{ title: string; url: string }>; localFailed?: boolean; thinking?: string; thinkSecs?: number }
   | { kind: 'event'; event: AgentProgressEvent }
   | { kind: 'media'; mediaKind: 'image' | 'audio' | 'video'; paths: string[]; dir: string; total: number; label: string }
   | { kind: 'step'; step: StepRecord }
@@ -51,6 +51,27 @@ type FeedData =
 type FeedItem = FeedData & { id: number };
 
 const FEED_CAP = 400;
+
+// Separa o raciocínio (<think>…</think>) da resposta de um modelo de raciocínio
+// (qwen3, deepseek-r1…). Cobre os 3 formatos reais: par completo, `</think>` órfão
+// (o template do modelo já abre o bloco) e `<think>` nunca fechado (stream cortado).
+// Usado em TODO lugar que exibe resposta de chat — pensamento nunca vaza como texto.
+function splitThink(raw: string): { clean: string; thinking?: string } {
+  if (!raw || (!raw.includes('<think>') && !raw.includes('</think>'))) return { clean: raw };
+  const pair = raw.match(/<think>([\s\S]*?)<\/think>/);
+  if (pair) {
+    const thinking = pair[1].trim() || undefined;
+    const clean = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    return { clean, thinking };
+  }
+  const orphanClose = raw.indexOf('</think>');
+  if (orphanClose >= 0) {
+    const thinking = raw.slice(0, orphanClose).trim() || undefined;
+    return { clean: raw.slice(orphanClose + 8).trim(), thinking };
+  }
+  const openOnly = raw.indexOf('<think>');
+  return { clean: raw.slice(0, openOnly).trim(), thinking: raw.slice(openOnly + 7).trim() || undefined };
+}
 
 // Sugestões de modelos por HARDWARE — do PC comum ao Mac de memória unificada e
 // servidores. Cada um é um nome real do Ollama (`ollama pull <nome>`). Quem tem
@@ -212,12 +233,61 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
   const [thinkIdx, setThinkIdx] = useState(0);   // frase de "pensando" que cicla no loading do chat
   // Streaming do chat: a resposta vai aparecendo palavra por palavra (estilo ChatGPT).
   // streamIdRef identifica QUAL request está na tela (deltas de outra request são ignorados).
+  // Modelos de raciocínio (qwen3, deepseek-r1…) prefixam <think>…</think>: o pensamento vai
+  // pro bloco 💭 esmaecido (streamThink) e a resposta de verdade pro streamText — igual às
+  // IAs grandes. Caso qwen3-no-Ollama: às vezes NÃO vem o <think> de abertura (o template
+  // já abre) e a resposta começa direto em raciocínio — detectamos pelo </think> órfão.
   const [streamText, setStreamText] = useState('');
+  const [streamThink, setStreamThink] = useState('');
+  const [thinkDone, setThinkDone] = useState(false);   // true = raciocínio fechou → vira o chip 💭
+  const [thinkSecs, setThinkSecs] = useState<number | null>(null);
   const streamIdRef = useRef<string | null>(null);
+  const thinkPhaseRef = useRef<'pre' | 'in' | 'after'>('pre');
+  // Acumuladores síncronos (a verdade); os states só espelham pra render.
+  const textAccRef = useRef('');
+  const thinkAccRef = useRef('');
+  const firstDeltaAtRef = useRef<number | null>(null);   // cronômetro do "Pensou por Xs"
+  const thinkSecsRef = useRef<number | null>(null);      // ref-espelho (o state fica stale no runChat)
   useEffect(() => {
     const off = (window as any).electronAPI?.onChatDelta?.((p: { streamId: string; delta: string }) => {
       if (!p || p.streamId !== streamIdRef.current) return;
-      setStreamText(prev => prev + p.delta);
+      if (firstDeltaAtRef.current == null) firstDeltaAtRef.current = Date.now();
+      const closeThink = () => {
+        thinkPhaseRef.current = 'after';
+        const secs = Math.max(1, Math.round((Date.now() - (firstDeltaAtRef.current ?? Date.now())) / 1000));
+        thinkSecsRef.current = secs;
+        setThinkSecs(secs);
+        setThinkDone(true);
+      };
+      let rest = p.delta;
+      while (rest) {
+        const phase = thinkPhaseRef.current;
+        if (phase === 'in') {
+          const close = rest.indexOf('</think>');
+          if (close >= 0) {
+            thinkAccRef.current += rest.slice(0, close);
+            closeThink();
+            rest = rest.slice(close + 8);
+          } else { thinkAccRef.current += rest; rest = ''; }
+        } else if (phase === 'pre') {
+          const open = rest.indexOf('<think>');
+          const orphanClose = rest.indexOf('</think>');
+          if (open >= 0 && (orphanClose < 0 || open < orphanClose)) {
+            const before = rest.slice(0, open);
+            if (before.trim()) textAccRef.current += before;
+            thinkPhaseRef.current = 'in';
+            rest = rest.slice(open + 7);
+          } else if (orphanClose >= 0) {
+            // </think> sem abertura (template do qwen3 já abre): tudo até aqui era raciocínio.
+            thinkAccRef.current += textAccRef.current + rest.slice(0, orphanClose);
+            textAccRef.current = '';
+            closeThink();
+            rest = rest.slice(orphanClose + 8);
+          } else { textAccRef.current += rest; rest = ''; }
+        } else { textAccRef.current += rest; rest = ''; }
+      }
+      setStreamText(textAccRef.current.replace(/^\s+/, ''));
+      setStreamThink(thinkAccRef.current.trim() ? thinkAccRef.current : '');
     });
     return () => { try { off?.(); } catch {} };
   }, []);
@@ -278,7 +348,7 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
   useEffect(() => {
     const el = feedRef.current;
     if (el && stickToBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [feed, chatLoading, streamText]);
+  }, [feed, chatLoading, streamText, streamThink]);
 
   // Enquanto espera a resposta do chat, cicla as frases de "pensando" (efeito de IA processando)
   // — mantém a pessoa olhando a tela enquanto o tempo passa. Para quando a resposta chega.
@@ -358,18 +428,28 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
     // Streaming: id único desta request — os deltas vão pintando no lugar do "pensando".
     const sid = 'st_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     streamIdRef.current = sid;
-    setStreamText('');
+    const resetStream = () => {
+      setStreamText(''); setStreamThink(''); setThinkDone(false); setThinkSecs(null);
+      thinkPhaseRef.current = 'pre'; textAccRef.current = ''; thinkAccRef.current = '';
+      firstDeltaAtRef.current = null;
+    };
+    resetStream(); thinkSecsRef.current = null;
     try {
       const { reply, suggestedCommand } = await onSendChat(msg, docText, sid);
       pendingSuggestionRef.current = suggestedCommand ?? null;
       // Modo IA Local travado (Ollama off): oferece a saída de 1 clique pra nuvem grátis.
       const localFailed = /Local AI failed/i.test(reply);
-      push({ kind: 'chat-assistant', text: reply, suggestedCommand, localFailed });
+      // Modelo de raciocínio: pensamento vira o chip 💭 (com duração); resposta fica limpa.
+      const { clean, thinking } = splitThink(reply);
+      const text = clean || thinking || reply;   // resposta vazia (só pensou) → mostra o que houver
+      push({ kind: 'chat-assistant', text, suggestedCommand, localFailed,
+             thinking: clean ? thinking : undefined,
+             thinkSecs: (clean && thinking && thinkSecsRef.current) ? thinkSecsRef.current : undefined });
     } catch (e: any) {
       push({ kind: 'error', text: String(e?.message ?? e) });
     } finally {
       streamIdRef.current = null;
-      setStreamText('');
+      resetStream();
       setChatLoading(false);
     }
   };
@@ -386,7 +466,9 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
     try {
       const { answer, sources } = await onResearch(msg);
       pendingSuggestionRef.current = null;
-      push({ kind: 'chat-assistant', text: answer, sources });
+      // Modelo de raciocínio local na síntese: pensamento não vaza na resposta da pesquisa.
+      const { clean, thinking } = splitThink(answer);
+      push({ kind: 'chat-assistant', text: clean || thinking || answer, sources, thinking: clean ? thinking : undefined });
     } catch (e: any) {
       push({ kind: 'error', text: String(e?.message ?? e) });
     } finally {
@@ -999,8 +1081,21 @@ export default function AgentCommandBar({ onExecute, onSendChat, onResearch, onC
         )}
         {feed.map(item => <FeedRow key={item.id} item={item} onContinue={handleContinueAfterManualHelp} helpActive={!!manualHelp} onConfirmRisky={handleConfirmRisky} confirmActive={!!pendingConfirm} onRunSuggestion={(cmd) => { pendingSuggestionRef.current = null; if (!loading && !chatLoading) runAgent(cmd); }} onOpenUrl={onOpenUrl} onSwitchToCloud={onSwitchToCloud} />)}
         {chatLoading && convoTabRef.current === activeTabId && (
-          streamText
-            ? <div className="chat-msg assistant"><div className="chat-ai-label">{activeAiLabel()}</div><div className="msg-content">{streamText}<span className="stream-caret">▍</span></div></div>
+          (streamText || streamThink)
+            ? <div className="chat-msg assistant"><div className="chat-ai-label">{activeAiLabel()}</div>
+                {/* Pensando AGORA: uma linha só, com as frases CRUAS do raciocínio passando
+                    (estilo GPT) — sem caixa. Quando fecha, vira o chip 💭 discreto. */}
+                {streamThink && !thinkDone && (
+                  <div className="chat-think-live">{streamThink.replace(/\s+/g, ' ').trimEnd().slice(-120)}</div>
+                )}
+                {streamThink && thinkDone && (
+                  <details className="chat-reasoning">
+                    <summary>💭 {thinkSecs ? t('feed.thoughtFor').replace('{s}', String(thinkSecs)) : t('feed.reasoning')}</summary>
+                    <div className="chat-reasoning-content">{streamThink}</div>
+                  </details>
+                )}
+                {(streamText || thinkDone) && <div className="msg-content">{streamText}<span className="stream-caret">▍</span></div>}
+              </div>
             : <div className="chat-msg assistant"><div className="chat-ai-label">{activeAiLabel()}</div><div className="msg-content thinking-line">{thinkPhrases[thinkIdx % thinkPhrases.length] || '…'}</div></div>
         )}
         {loading && convoTabRef.current === activeTabId && (
@@ -1136,6 +1231,12 @@ function FeedRow({ item, onContinue, helpActive, onConfirmRisky, confirmActive, 
     case 'chat-assistant':
       return (
         <div className="chat-msg assistant">
+          {item.thinking && (
+            <details className="chat-reasoning">
+              <summary>💭 {item.thinkSecs ? t('feed.thoughtFor').replace('{s}', String(item.thinkSecs)) : t('feed.reasoning')}</summary>
+              <div className="chat-reasoning-content">{item.thinking}</div>
+            </details>
+          )}
           <div className="msg-content">{item.text}</div>
           {item.sources && item.sources.length > 0 && (
             <div className="chat-sources">

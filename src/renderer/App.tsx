@@ -1318,7 +1318,9 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                 }
                 // QUICK INTENT: layperson media/file requests ("mp3 musica X", "baixe o
                 // pdf de Y") → execute the right action at step 0 WITHOUT calling the AI.
-                let quickAction = detectQuickAction(command, opts?.forceImage ? { forceImage: true } : undefined);
+                // localMode: no modo NUVEM (DeepSeek) o atalho determinístico de playlist
+                // NÃO intercepta — o modelo forte cura as músicas melhor. Só o local usa.
+                let quickAction = detectQuickAction(command, { forceImage: !!opts?.forceImage, localMode: store.localSettings.enabled });
                 // FOLLOW-UP sem IA: "e com a palavra bom dia?" / "agora com a frase X"
                 // reaproveita a intenção do pedido anterior trocando só o termo.
                 if (!quickAction && lastQuickActionRef.current) {
@@ -2265,81 +2267,98 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                     }
                     } // fim do else (não era "esse vídeo" da página atual)
                   } else if (action.type === 'create_playlist') {
-                    // "crie uma playlist com as 10 músicas mais antigas do 2Pac": o MODELO
-                    // já nomeou as músicas (action.songs); aqui resolvemos cada uma → id de
-                    // vídeo real (sem Shorts) e montamos a playlist por URL (watch_videos),
-                    // que toca na hora SEM login. Determinístico → auto-done.
+                    // Duas rotas, ambas determinísticas no fim:
+                    // (a) songs[] nomeadas (pelo MODELO ou pelo atalho com lista) → resolve cada uma;
+                    // (b) SÓ artista/tema+count (atalho 0-token) → top-N faixas numa busca única
+                    //     (resolveManyVideos, sem Shorts) — funciona igual com QUALQUER IA.
+                    // Depois: playlist por URL (watch_videos), toca na hora SEM login → auto-done.
                     setAgentVisual('acting');
                     const songs = (action.songs || []).map(s => String(s).trim()).filter(Boolean).slice(0, 25);
-                    if (songs.length < 2) {
-                      toolResult = { success: false, error: 'I need at least 2 songs to build the playlist.' };
-                      history += '\nCREATE_PLAYLIST: poucas músicas. Reemita create_playlist com a lista de títulos (use seu conhecimento do artista).';
-                    } else {
+                    const plArtist = String((action as any).artist || '').trim();
+                    let ids: string[] = [];
+                    let plFail = '';
+                    if (songs.length >= 2) {
                       onProgress({ kind: 'status', message: `🎵 Building the playlist — finding ${songs.length} songs on YouTube (skipping Shorts)…` });
                       const resolved = (await window.electronAPI?.resolveVideos?.(songs)) || [];
                       const ok = resolved.filter(r => r.id);
-                      const ids = ok.map(r => r.id as string);
-                      if (ids.length < 2) {
-                        toolResult = { success: false, error: `Only found ${ids.length} video(s) of the ${songs.length} songs — cannot build the playlist.` };
-                      } else {
+                      ids = ok.map(r => r.id as string);
+                      if (ids.length < 2) plFail = `Only found ${ids.length} video(s) of the ${songs.length} songs — cannot build the playlist.`;
+                    } else if (plArtist.length >= 2) {
+                      const wantN = Math.min(Math.max(Number((action as any).count) || 10, 2), 12);
+                      onProgress({ kind: 'status', message: `🎵 Building the playlist — top ${wantN} "${plArtist}" tracks on YouTube (skipping Shorts)…` });
+                      const rm = await window.electronAPI?.resolveManyVideos?.(plArtist, wantN);
+                      const vids = (rm?.ok && rm.videos) ? rm.videos : [];
+                      ids = vids.map(v => v.id);
+                      if (ids.length < 2) plFail = (rm as any)?.error || `Couldn't find enough "${plArtist}" tracks on YouTube.`;
+                    } else {
+                      plFail = 'I need at least 2 songs to build the playlist.';
+                      history += '\nCREATE_PLAYLIST: poucas músicas. Reemita create_playlist com a lista de títulos (use seu conhecimento do artista).';
+                    }
+                    if (plFail) {
+                      toolResult = { success: false, error: plFail };
+                    } else {
                         const plUrl = `https://www.youtube.com/watch_videos?video_ids=${ids.join(',')}`;
                         const beforeUrl = wv.getURL();
                         await executeBrowserAction(wv, { type: 'navigate', url: plUrl } as BrowserAction);
                         await waitForWebviewSettled(wv, beforeUrl);
                         await forcePlayVideo(wv);   // já começa tocando a 1ª
-                        const titles = ok.map(r => r.title || r.query);
-                        // Nome + privacidade: do modelo (action) OU extraídos do comando.
-                        const nameM = command.match(/\b(?:nome|chamad[ao]|chame\s+de|t[ií]tulo|titulo)\s*:?\s*["'“”]?\s*([^\n"'“”]+?)\s*(?:["'“”]|,|\bque\b|\bprivad|\bparticular|$)/i);
+                        // Nome + privacidade: da action (detector/modelo já extraiu limpo) ou do
+                        // comando cru. Lookahead PARA em com/with/e/and/que — senão o nome viraria
+                        // "Treino com 8 músicas do Eminem" (o rabo inteiro do comando).
+                        const nameM = command.match(/\b(?:nome|chamad[ao]|chame\s+de|t[ií]tulo|titulo|named?|called|llamad[ao])\s*:?\s*["'“”]?([^\n"'“”,]{1,40}?)(?=\s+(?:com|with|con|que|e\s|and\s|y\s|privad\w*|particular|secret\w*|private)|["'“”,]|$)/i);
                         const plName = (action.name && action.name.trim()) || (nameM ? nameM[1].trim() : '');
-                        const wantPrivate = action.private === true || /\b(particular|privad[ao]|secret[ao]|s[oó]\s+(?:pra|para)\s+mim)\b/i.test(command);
-                        const wantsSave = !!plName || wantPrivate || /\b(salv\w+|salve|guard\w+|adicion\w+\s+(ao|no)\s+(meu\s+)?perfil)\b/i.test(command);
+                        const wantPrivate = action.private === true || /\b(particular|privad[ao]|secret[ao]|private|s[oó]\s+(?:pra|para)\s+mim)\b/i.test(command);
+                        // "CRIAR playlist" = criar DE VERDADE, salva na conta. A ação só é
+                        // create_playlist quando o comando teve verbo de criar → SALVAMOS por
+                        // padrão (watch_videos sozinho é só uma fila temporária, "abre uma lista").
+                        // Nome autogerado do artista/1ª música se o usuário não deu um.
+                        const rawName = (plName || plArtist || songs[0] || 'Minha playlist').replace(/\s+/g, ' ').trim();
+                        const saveName = (rawName.charAt(0).toUpperCase() + rawName.slice(1)).slice(0, 60);
                         allResults.push({ action, result: { success: true, info: { count: ids.length, url: plUrl } } });
-                        if (wantsSave) {
-                          // HÍBRIDO: a IA já escolheu as músicas; a "mão" determinística SALVA as
-                          // 10 na conta logada. O save da página watch pega só 1 vídeo — então
-                          // criamos a playlist com o 1º e ADICIONAMOS os outros um a um (navegando
-                          // em cada vídeo; você vê o navegador montar a lista, música a música).
-                          const saveName = plName || `${(songs[0] || 'Minha').split(/\s+/)[0]} — playlist`;
-                          onProgress({ kind: 'status', message: `🎶 Saving "${saveName}"${wantPrivate ? ' (private)' : ''}: creating and adding ${ids.length} songs…` });
-                          await executeBrowserAction(wv, { type: 'navigate', url: `https://www.youtube.com/watch?v=${ids[0]}` } as BrowserAction);
-                          await waitForWebviewSettled(wv, plUrl);
-                          await new Promise(r => setTimeout(r, 1200));
-                          const created = await trySaveNamedPlaylist(wv, saveName);
-                          if (!created.ok) {
-                            onProgress({ kind: 'status', message: `⚠️ Could not create the playlist (stopped at "${created.step}"). Are you logged in to YouTube?` });
-                            toolResult = { success: false, error: `Failed to create the playlist (step ${created.step}). You must be logged in to YouTube.` };
-                          } else {
-                            let added = 1;
-                            for (let k = 1; k < ids.length; k++) {
-                              throwIfCancelled();
-                              await executeBrowserAction(wv, { type: 'navigate', url: `https://www.youtube.com/watch?v=${ids[k]}` } as BrowserAction);
-                              await waitForWebviewSettled(wv, '');
-                              await new Promise(r => setTimeout(r, 900));
-                              const a = await tryAddToExistingPlaylist(wv, saveName);
-                              if (a.ok) added++;
-                              onProgress({ kind: 'status', message: `➕ "${saveName}": ${added}/${ids.length} songs…` });
-                            }
-                            // Volta pra tocar a playlist inteira (confirmação visual).
-                            await executeBrowserAction(wv, { type: 'navigate', url: plUrl } as BrowserAction);
+                        onProgress({ kind: 'status', message: `🎶 Creating the playlist "${saveName}"${wantPrivate ? ' (private)' : ''} in your YouTube account — adding ${ids.length} songs…` });
+                        // Cria a playlist COM o 1º vídeo (página watch limpa) e adiciona os demais
+                        // um a um (você vê o navegador montar a lista, música a música).
+                        await executeBrowserAction(wv, { type: 'navigate', url: `https://www.youtube.com/watch?v=${ids[0]}` } as BrowserAction);
+                        await waitForWebviewSettled(wv, plUrl);
+                        await new Promise(r => setTimeout(r, 1300));
+                        const created = await trySaveNamedPlaylist(wv, saveName, wantPrivate);
+                        if (created.ok) {
+                          let added = 1;
+                          for (let k = 1; k < ids.length; k++) {
+                            throwIfCancelled();
+                            await executeBrowserAction(wv, { type: 'navigate', url: `https://www.youtube.com/watch?v=${ids[k]}` } as BrowserAction);
                             await waitForWebviewSettled(wv, '');
-                            await forcePlayVideo(wv);
-                            const doneMsg = `✅ Playlist "${saveName}" saved to your account (private), with ${added} of ${ids.length} songs${added < ids.length ? ' (some failed to add)' : ''}. Playing now.`;
-                            onProgress({ kind: 'status', message: doneMsg });
-                            setLastFooterMsg(doneMsg);
-                            finishRun(added >= 2 ? 'success' : 'failed', doneMsg);
-                            return { thought: doneMsg, results: allResults, done: { type: 'done', reason: doneMsg, success: added >= 2 } as BrowserAction };
+                            await new Promise(r => setTimeout(r, 900));
+                            const a = await tryAddToExistingPlaylist(wv, saveName);
+                            if (a.ok) added++;
+                            onProgress({ kind: 'status', message: `➕ "${saveName}": ${added}/${ids.length} songs…` });
                           }
+                          // Volta pra tocar a playlist inteira (confirmação visual).
+                          await executeBrowserAction(wv, { type: 'navigate', url: plUrl } as BrowserAction);
+                          await waitForWebviewSettled(wv, '');
+                          await forcePlayVideo(wv);
+                          const priv = created.private ? ' (private)' : '';
+                          // created.ok JÁ prova que a playlist foi criada e salva na conta →
+                          // é SUCESSO (o pedido "criar" foi cumprido), mesmo que alguma faixa
+                          // não tenha entrado — a mensagem diz honestamente "X of N".
+                          const doneMsg = `✅ Playlist "${saveName}"${priv} created in your account with ${added} of ${ids.length} songs${added < ids.length ? ' (some failed to add)' : ''}. Playing now.`;
+                          onProgress({ kind: 'status', message: doneMsg });
+                          setLastFooterMsg(doneMsg);
+                          finishRun('success', doneMsg);
+                          return { thought: doneMsg, results: allResults, done: { type: 'done', reason: doneMsg, success: true } as BrowserAction };
                         } else {
-                          const doneMsg = `🎶 Playlist created and playing: ${ids.length} songs (${titles.slice(0, 3).join(', ')}${titles.length > 3 ? '…' : ''}).`;
-                          onProgress({ kind: 'status', message: `✅ ${doneMsg}` });
-                          if (actionQueue.length === 0) {
-                            setLastFooterMsg(`✅ ${doneMsg}`);
-                            finishRun('success', doneMsg);
-                            return { thought: doneMsg, results: allResults, done: { type: 'done', reason: doneMsg, success: true } as BrowserAction };
-                          }
-                          toolResult = { success: true, info: { count: ids.length } };
+                          // Não deu pra SALVAR (mais provável: não logado no YouTube; ou a página
+                          // mudou — o passo que travou vai no texto pra diagnóstico). A música TOCA
+                          // mesmo assim (a fila watch_videos), pra não sair de mãos vazias.
+                          await executeBrowserAction(wv, { type: 'navigate', url: plUrl } as BrowserAction);
+                          await waitForWebviewSettled(wv, '');
+                          await forcePlayVideo(wv);
+                          const doneMsg = `🎶 I lined up ${ids.length} songs and they're playing, but I couldn't SAVE the playlist to your account (stopped at "${created.step}"). Sign in to YouTube (⋮ menu → Sign in with Google) and ask again to create it for real.`;
+                          onProgress({ kind: 'status', message: doneMsg });
+                          setLastFooterMsg(doneMsg);
+                          finishRun('failed', doneMsg);
+                          return { thought: doneMsg, results: allResults, done: { type: 'done', reason: doneMsg, success: false } as BrowserAction };
                         }
-                      }
                     }
                   } else if (action.type === 'open_videos') {
                     // "abre N abas, cada uma com um vídeo/música de X" → resolve N vídeos
@@ -3094,7 +3113,10 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
               // Caixa unificada: o modo resposta pode propor uma ação numa linha
               // [[ACTION: ...]]. Extraímos a proposta e a removemos do texto exibido —
               // ela vira o botão "⚡ Fazer isso" (e um "sim" do usuário também a executa).
-              const m = raw.match(/\[\[\s*ACTION\s*:\s*([^\]]+?)\s*\]\]/i);
+              // IMPORTANTE: a proposta é lida SÓ da resposta (fora do <think>…</think>) —
+              // um modelo de raciocínio divagando "[[ACTION:…]]" no pensamento não vira botão.
+              const answerOnly = raw.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/^[\s\S]*?<\/think>/, '');
+              const m = answerOnly.match(/\[\[\s*ACTION\s*:\s*([^\]]+?)\s*\]\]/i);
               const suggestedCommand = m ? m[1].trim() : undefined;
               const reply = raw.replace(/\[\[\s*ACTION\s*:[^\]]*\]\]/ig, '').trim() || raw.trim();
               return { reply, suggestedCommand };
@@ -3227,28 +3249,33 @@ async function forcePlayVideo(wv: Electron.WebviewTag): Promise<void> {
 // coverage check (que bloqueava o campo do título). Estrutura confirmada por sonda 2026:
 // botão aria-label="Salvar na playlist" → item "Nova playlist" → <textarea placeholder
 // "Escolha um título"> → botão "Criar". Visibilidade já vem "Particular" por padrão.
-async function trySaveNamedPlaylist(wv: Electron.WebviewTag, name: string): Promise<{ ok: boolean; step?: string; err?: string }> {
-  const js = `(async function(name){
+async function trySaveNamedPlaylist(wv: Electron.WebviewTag, name: string, makePrivate = false): Promise<{ ok: boolean; step?: string; err?: string; private?: boolean }> {
+  const js = `(async function(name, makePrivate){
     function wait(ms){return new Promise(function(r){setTimeout(r,ms);});}
+    function norm(s){return (s||'').replace(/\\s+/g,' ').trim();}
     function setVal(el,val){try{el.focus();var proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;var setter=Object.getOwnPropertyDescriptor(proto,'value').set;setter.call(el,val);}catch(e){el.value=val;}el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}
+    // rótulo de "Salvar/Save/Guardar" em pt/en/es (aria-label OU texto do botão)
+    var SAVE_RE=/salvar na playlist|salvar em playlist|save to playlist|save video|guardar en (?:la )?(?:lista|playlist)|a[nñ]adir a (?:la )?(?:lista|playlist)|add to playlist/i;
     try{
-      var save=Array.prototype.slice.call(document.querySelectorAll('button')).find(function(b){return /salvar na playlist|save to playlist/i.test(b.getAttribute('aria-label')||'');});
+      var save=Array.prototype.slice.call(document.querySelectorAll('button,yt-button-shape,[role=button]')).find(function(b){var a=(b.getAttribute&&b.getAttribute('aria-label'))||'';return SAVE_RE.test(a)||SAVE_RE.test(norm(b.textContent));});
       if(!save) return {ok:false,step:'save-btn'};
-      save.click(); await wait(1700);
-      var nova=Array.prototype.slice.call(document.querySelectorAll('ytd-popup-container *,tp-yt-paper-dialog *,[role=dialog] *')).find(function(e){return e.childElementCount===0 && /^\\s*(nova playlist|new playlist)\\s*$/i.test(e.textContent||'');});
+      (save.closest('button,[role=button]')||save).click(); await wait(1700);
+      var nova=Array.prototype.slice.call(document.querySelectorAll('ytd-popup-container *,tp-yt-paper-dialog *,[role=dialog] *')).find(function(e){return e.childElementCount===0 && /^\\s*(nova playlist|criar (?:nova )?playlist|new playlist|create (?:new )?playlist|nueva lista(?: de reproducci[oó]n)?|crear (?:nueva )?(?:lista|playlist))\\s*$/i.test(e.textContent||'');});
       if(!nova) return {ok:false,step:'nova-playlist'};
       (nova.closest('[role=option],tp-yt-paper-item,ytd-add-to-playlist-create-renderer,button,a,[role=button]')||nova).click();
       await wait(1700);
-      var ta=document.querySelector('tp-yt-paper-dialog[opened] textarea, tp-yt-paper-dialog textarea, textarea[placeholder*="t\\u00edtulo" i], textarea[placeholder*="titulo" i], textarea[placeholder*="title" i]');
+      var ta=document.querySelector('tp-yt-paper-dialog[opened] textarea, tp-yt-paper-dialog textarea, ytd-popup-container textarea, [role=dialog] textarea, textarea[placeholder*="t\\u00edtulo" i], textarea[placeholder*="titulo" i], textarea[placeholder*="title" i], textarea[placeholder*="nombre" i]');
       if(!ta) return {ok:false,step:'title-input'};
       setVal(ta,name); await wait(800);
-      var dlg=ta.closest('tp-yt-paper-dialog')||document;
-      var criar=Array.prototype.slice.call(dlg.querySelectorAll('button,tp-yt-paper-button,yt-button-shape,[role=button]')).find(function(b){return /^\\s*(criar|create)\\s*$/i.test((b.textContent||'').replace(/\\s+/g,' ').trim());});
+      var dlg=ta.closest('tp-yt-paper-dialog')||ta.closest('[role=dialog]')||document;
+      // Visibilidade já vem "Particular" (privada) por PADRÃO no YouTube (verificado no DOM
+      // real 2026-07) → sem toggle frágil. Botão "Criar" habilita sozinho após o título.
+      var criar=Array.prototype.slice.call(dlg.querySelectorAll('button,tp-yt-paper-button,yt-button-shape,[role=button]')).find(function(b){return /^\\s*(criar|create|crear)\\s*$/i.test(norm(b.textContent));});
       if(!criar) return {ok:false,step:'criar-btn'};
-      criar.click(); await wait(2200);
-      return {ok:true};
+      (criar.closest('button,[role=button]')||criar).click(); await wait(2200);
+      return {ok:true,private:makePrivate};
     }catch(e){return {ok:false,step:'exception',err:String(e&&e.message)};}
-  })(${JSON.stringify(name)})`;
+  })(${JSON.stringify(name)}, ${makePrivate ? 'true' : 'false'})`;
   try { return await wv.executeJavaScript(js) as any; } catch (e: any) { return { ok: false, step: 'inject', err: String(e?.message ?? e) }; }
 }
 
@@ -3260,17 +3287,19 @@ async function tryAddToExistingPlaylist(wv: Electron.WebviewTag, name: string): 
     function wait(ms){return new Promise(function(r){setTimeout(r,ms);});}
     function norm(s){return (s||'').replace(/\\s+/g,' ').trim();}
     function clean(s){return norm(s).replace(/particular|p\\u00fablica|n\\u00e3o listada|public|unlisted|private/ig,'').trim();}
+    var SAVE_RE=/salvar na playlist|salvar em playlist|save to playlist|save video|guardar en (?:la )?(?:lista|playlist)|a[nñ]adir a (?:la )?(?:lista|playlist)|add to playlist/i;
     try{
-      var save=Array.prototype.slice.call(document.querySelectorAll('button')).find(function(b){return /salvar na playlist|save to playlist/i.test(b.getAttribute('aria-label')||'');});
+      var save=Array.prototype.slice.call(document.querySelectorAll('button,yt-button-shape,[role=button]')).find(function(b){var a=(b.getAttribute&&b.getAttribute('aria-label'))||'';return SAVE_RE.test(a)||SAVE_RE.test(norm(b.textContent));});
       if(!save) return {ok:false,step:'save-btn'};
-      save.click(); await wait(1600);
+      (save.closest('button,[role=button]')||save).click(); await wait(1600);
       var rows=Array.prototype.slice.call(document.querySelectorAll('yt-list-item-view-model,ytd-playlist-add-to-option-renderer,[role=option]'));
       var target=null;
       for(var i=0;i<rows.length;i++){ if(clean(rows[i].textContent).toLowerCase()===name.toLowerCase()){target=rows[i];break;} }
       if(!target){ var rx=new RegExp('^'+name.replace(/[.*+?^\${}()|[\\]\\\\]/g,'\\\\$&'),'i'); target=rows.find(function(r){return rx.test(clean(r.textContent));}); }
       if(!target) return {ok:false,step:'find-row',have:rows.map(function(r){return clean(r.textContent).slice(0,20);}).slice(0,8)};
-      // UI nova (yt-list-item-view-model): clicar a linha (ou filho clicável) marca a playlist → adiciona o vídeo.
-      (target.querySelector('[role=checkbox],button,a,.yt-list-item-view-model-wiz__container')||target).click();
+      // UI nova (yt-list-item-view-model): a linha inteira é o clicável (verificado no DOM real
+      // 2026-07 — não há [role=checkbox]; o wrapper é .ytListItemViewModelLayoutWrapper).
+      (target.querySelector('[role=checkbox],.ytListItemViewModelLayoutWrapper,.ytListItemViewModelMainContainer,a,button')||target).click();
       await wait(800);
       var close=document.querySelector('tp-yt-paper-dialog [aria-label*="Fechar" i],ytd-popup-container [aria-label*="Fechar" i],tp-yt-paper-dialog #close-button button');
       if(close)close.click(); else { try{document.body.click();}catch(e){} }

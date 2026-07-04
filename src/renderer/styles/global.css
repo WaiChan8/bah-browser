@@ -592,6 +592,34 @@ body {
 }
 @keyframes thinkShimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
 
+/* Raciocínio do modelo, estilo GPT: enquanto pensa, UMA linha com as frases cruas
+   passando (sem caixa, esmaecida, com o brilho varrendo). Quando termina, vira um
+   chip discreto "💭 Pensou por Xs" que expande o pensamento completo se quiser. */
+.chat-think-live{
+  padding:2px 0 6px;font-size:12px;line-height:1.4;
+  white-space:nowrap;overflow:hidden;
+  background:linear-gradient(100deg,#4a525e 25%,#c7d2e0 50%,#4a525e 75%);
+  background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+  animation:thinkShimmer 2.2s linear infinite;
+}
+.chat-reasoning{margin:0 0 6px;}
+.chat-reasoning summary{
+  cursor:pointer;list-style:none;user-select:none;display:inline-flex;align-items:center;gap:4px;
+  padding:2px 9px;font-size:10.5px;font-weight:600;color:var(--text-muted);
+  border:1px solid var(--border);border-radius:999px;
+  transition:color 0.15s ease,background 0.15s ease;
+}
+.chat-reasoning summary::-webkit-details-marker{display:none;}
+.chat-reasoning summary:hover{color:var(--text-secondary);background:var(--bg-hover);}
+.chat-reasoning-content{
+  margin-top:6px;padding:8px 10px;font-size:11.5px;line-height:1.55;color:var(--text-muted);
+  border:1px solid var(--border);border-radius:8px;background:var(--bg-secondary);
+  white-space:pre-wrap;word-break:break-word;
+  max-height:180px;overflow-y:auto;   /* pensamento gigante não engole o chat */
+}
+
 /* CHAT INPUT */
 .chat-input-area {
   display:flex;gap:8px;

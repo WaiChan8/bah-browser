@@ -75,6 +75,66 @@ async function readSseStream(res: Response, onDelta: (d: string) => void, holdba
   return full;
 }
 
+// Lê um corpo de stream do OLLAMA (stream:true): NDJSON — um objeto JSON por linha
+// ({message:{content}} até done:true), NÃO é SSE. Mesmo padrão de robustez do
+// readSseStream: guarda de 30s por chunk + cancel no erro. Modelos de raciocínio
+// (qwen3 etc.) podem mandar o pensamento em message.thinking — embrulhamos em
+// <think>…</think> pra o renderer exibir igual ao caso dos tags inline no content.
+async function readOllamaNdjson(res: Response, onDelta: (d: string) => void): Promise<string> {
+  const reader = (res.body as any)?.getReader?.();
+  if (!reader) throw new Error('stream unsupported');
+  const decoder = new TextDecoder();
+  let buf = '';
+  let full = '';
+  let thinkOpen = false;
+  const emit = (d: string) => { if (d) { full += d; try { onDelta(d); } catch {} } };
+  let stallTimer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    while (true) {
+      const chunk = await new Promise<{ done: boolean; value?: Uint8Array }>((resolve, reject) => {
+        stallTimer = setTimeout(() => reject(new Error('stream stalled (30s)')), 30000);
+        Promise.resolve(reader.read()).then(
+          (r: any) => { if (stallTimer) clearTimeout(stallTimer); resolve(r); },
+          (e: any) => { if (stallTimer) clearTimeout(stallTimer); reject(e); },
+        );
+      });
+      if (chunk.done) break;
+      buf += decoder.decode(chunk.value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        try {
+          const j = JSON.parse(line);
+          const th = j.message?.thinking ?? '';
+          if (th) { if (!thinkOpen) { emit('<think>'); thinkOpen = true; } emit(th); }
+          const d = j.message?.content ?? '';
+          if (d) { if (thinkOpen) { emit('</think>'); thinkOpen = false; } emit(d); }
+          if (j.done === true) { if (thinkOpen) { emit('</think>'); thinkOpen = false; } return full; }
+        } catch { /* linha parcial — ignora */ }
+      }
+    }
+  } catch (e) {
+    try { await reader.cancel(); } catch {}
+    throw e;
+  } finally {
+    if (stallTimer) clearTimeout(stallTimer);
+    try { reader.releaseLock?.(); } catch {}
+  }
+  if (thinkOpen) emit('</think>');
+  return full;
+}
+
+// Remove o raciocínio (<think>…</think>) de uma resposta de modelo de raciocínio,
+// cobrindo também o `</think>` órfão (template que já abre o bloco). Usado no
+// histórico de conversa e nos retornos stateless (classificador/pesquisa/monitores),
+// que consomem a resposta como DADO — pensamento vazado quebraria o parse deles.
+function stripThink(s: string): string {
+  if (!s || (!s.includes('<think>') && !s.includes('</think>'))) return s;
+  return s.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/^[\s\S]*?<\/think>/, '').trim();
+}
+
 /**
  * Limpa texto raspado antes de virar JSON pro provedor de IA. Páginas (YouTube,
  * redes) têm emojis = pares surrogate UTF-16; quando o texto é cortado (.slice)
@@ -419,11 +479,13 @@ export class AIEngine {
         ? `\n\n[Current page context]\n${pageContext.slice(0, 8000)}`
         : '';
 
-    // Stateless: usado pela Pesquisa Rápida (síntese de snippets). NÃO entra no
-    // histórico de conversa — senão cada busca enfia ~2KB de snippets no contexto
-    // compartilhado, que cresceria sem limite e poluiria o chat seguinte.
+    // Stateless: usado pela Pesquisa Rápida (síntese de snippets), classificador de
+    // intenção e monitores. NÃO entra no histórico — e o retorno vai LIMPO de <think>:
+    // esses chamadores consomem a resposta como DADO (roteiam/parseiam por palavra),
+    // então raciocínio vazado quebraria a lógica deles.
     if (stateless) {
-      return this.callChatLLM([{ role: 'user', content: userMessage + contextNote }], onDelta);
+      const text = await this.callChatLLM([{ role: 'user', content: userMessage + contextNote }], onDelta);
+      return stripThink(text);
     }
 
     // Conversa DAQUELA aba (chaveada por tabId).
@@ -431,7 +493,11 @@ export class AIEngine {
     history.push({ role: 'user', content: userMessage + contextNote });
 
     const text = await this.callChatLLM(history, onDelta);
-    history.push({ role: 'assistant', content: text });
+    // Higiene: modelos de raciocínio (qwen3 etc.) prefixam <think>…</think> na resposta.
+    // O histórico guarda SÓ a resposta limpa — re-mandar raciocínio velho gasta contexto
+    // e confunde o modelo. (O retorno pro renderer segue cheio: a UI exibe o pensamento.)
+    const clean = stripThink(text);
+    history.push({ role: 'assistant', content: clean || text });
     const CAP = 40;   // teto de itens por aba (evita crescer sem limite com muitas abas)
     if (history.length > CAP) history.splice(0, history.length - CAP);
     this.conversationHistories.set(tabId, history);
@@ -476,7 +542,7 @@ export class AIEngine {
       case 'nvidia': return this.callNim(messages.map(m => ({ ...m, image: undefined })), isAgentMode, onDelta);
       case 'pollinations': return this.callPollinations(messages, isAgentMode, onDelta);
       // Strip screenshots from local model calls — saves VRAM and avoids hangs
-      case 'ollama': return this.callOllama(messages.map(m => ({ ...m, image: undefined })), isAgentMode);
+      case 'ollama': return this.callOllama(messages.map(m => ({ ...m, image: undefined })), isAgentMode, onDelta);
     }
   }
 
@@ -927,30 +993,36 @@ export class AIEngine {
   }
   private ollamaWarmed = false;
 
-  private async callOllama(messages: Message[], isAgentMode: boolean): Promise<string> {
+  private async callOllama(messages: Message[], isAgentMode: boolean, onDelta?: (d: string) => void): Promise<string> {
     const systemMsg = (isAgentMode ? BROWSER_AGENT_SYSTEM_PROMPT : CHAT_ASSISTANT_SYSTEM_PROMPT) + langSuffix() + this.engineIdentity(isAgentMode);
     // Never send images to local model — it consumes too much VRAM and causes hangs
     const resolvedModel = await this.resolveOllama();
-    const isGptOss = /gpt-?oss|gptoss/.test(resolvedModel.toLowerCase());
+    // Modelo de RACIOCÍNIO (gpt-oss/harmony, qwen3, deepseek-r1): pensa antes de responder.
+    // NÃO pode ser tratado como modelo comum — forçar format:json + "wrap em ```json" faz
+    // ele despejar o raciocínio nos campos e cuspir ação vazia (navigate("") / ref NaN).
+    // (Era exatamente o bug do qwen3.) Todos ganham o mesmo tratamento do gpt-oss.
+    // qwen3-vl é modelo de VISÃO/instruct (não raciocina antes) → fica de FORA (senão
+    // levava think:true, dava 400+retry e perdia o format:json que ele deve receber).
+    const isReasoning = /gpt-?oss|gptoss|qwen3(?!-?vl)|deepseek-r1/.test(resolvedModel.toLowerCase());
     const formatted = messages.map((m, i) => {
       let content = m.content;
       if (isAgentMode && m.role === 'user' && i === messages.length - 1) {
-        // gpt-oss é modelo de raciocínio (harmony): se mandar "inclua thought/evaluation",
-        // ele despeja o raciocínio nos campos e quebra o JSON (dois objetos grudados).
-        // Pedimos só 1 objeto compacto no fim, raciocinando em silêncio (o raciocínio dele
-        // vai pro canal 'thinking' do Ollama). Demais modelos seguem a instrução estilo-qwen.
-        content += isGptOss
-          ? '\n\nReturn ONLY ONE compact JSON object for your next action, as the LAST thing in your reply with nothing after it. Example: {"thought":"short","evaluation":"short","action":"click_ref","ref":3}. Reason SILENTLY — never write analysis/explanation text outside the JSON. Keep "thought" and "evaluation" to ONE short sentence each.'
+        // Modelo de raciocínio: pede só 1 JSON compacto no FIM, raciocinando em silêncio
+        // (o raciocínio vai pro canal 'thinking' do Ollama). Modelo comum segue estilo-qwen.
+        content += isReasoning
+          ? '\n\nReturn ONLY ONE compact JSON object for your next action, as the LAST thing in your reply with nothing after it. Example: {"thought":"short","evaluation":"short","action":"navigate","url":"https://www.youtube.com"}. Reason SILENTLY — never write analysis/explanation text outside the JSON. ALWAYS fill every field the action needs (url for navigate, ref number for click_ref/fill_ref). Keep "thought" and "evaluation" to ONE short sentence each.'
           : '\n\nIMPORTANT: You must evaluate the observed state and return your next step as a structured JSON object. Wrap your JSON in ```json blocks. Do NOT output freeform analysis. ONLY output the JSON object. Write the "thought" and "evaluation" fields in Portuguese or English ONLY — never Chinese.';
       }
       return { role: m.role, content };
     });
 
     const model = resolvedModel;   // já resolvido acima (usa o que está REALMENTE instalado)
+    // Streaming SÓ no chat (modo agente precisa do JSON inteiro de uma vez).
+    const streaming = !!onDelta && !isAgentMode;
     const body: any = {
       model,
       messages: [{ role: 'system', content: systemMsg }, ...formatted],
-      stream: false,
+      stream: streaming,
       keep_alive: '15m',     // keep the model hot in VRAM between agent steps
       options: {
         num_ctx: 8192,       // big enough for the DOM list + page text + history (4k truncated the page → blind agent)
@@ -961,10 +1033,17 @@ export class AIEngine {
     // modelos que a suportam bem (qwen incl. qwen3-vl, llama, mistral, gemma). Se o
     // modelo tropeçar, o parser ainda extrai o bloco ```json do texto.
     const m = model.toLowerCase();
-    // gpt-oss é modelo de raciocínio (harmony): format:json conflita e ele erra/alucina.
-    // Deixamos ele responder natural (raciocínio vai pro campo 'thinking') e o parser pega o JSON.
-    if (isAgentMode && /qwen|llama|mistral|gemma/.test(m) && !/gpt-?oss|gptoss/.test(m)) {
+    // format:json SÓ pra modelo comum (instruct). Modelo de raciocínio erra/aluciza com ele
+    // (o raciocínio brigando com a gramática JSON → ação vazia). Ele responde natural e o
+    // parser tolerante ([page-agent.ts]) extrai o JSON do fim.
+    if (isAgentMode && /qwen|llama|mistral|gemma/.test(m) && !isReasoning) {
       body.format = 'json';
+    }
+    // Modelo de raciocínio: pede o pensamento no canal SEPARADO 'thinking' — no agente,
+    // o content vem limpo (só o JSON, raciocínio fora); no chat, o leitor NDJSON embrulha
+    // em <think> pra UI. Se o Ollama não suportar 'think', a retentativa abaixo refaz sem.
+    if (isReasoning) {
+      body.think = true;
     }
 
     const t0 = Date.now();
@@ -989,14 +1068,34 @@ export class AIEngine {
     console.log(`[Ollama] ← ${res.status} in ${Date.now() - t0}ms`);
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`Ollama API error ${res.status}: ${errText.slice(0, 400)}`);
+      // Modelo importado de GGUF cru pode não ter a capability 'thinking' → o Ollama
+      // recusa o think:true. Refaz UMA vez sem ele (ainda streamando; os tags <think>
+      // inline no texto seguem tratados pelo renderer).
+      if (body.think && res.status >= 400 && res.status < 500) {
+        delete body.think;
+        res = await fetchWithTimeout(`${this.baseUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }, timeoutMs);
+        if (!res.ok) throw new Error(`Ollama API error ${res.status}: ${(await res.text()).slice(0, 400)}`);
+      } else {
+        throw new Error(`Ollama API error ${res.status}: ${errText.slice(0, 400)}`);
+      }
     }
+
+    // Chat streamado: NDJSON linha a linha (o fallback do callChatLLM refaz sem stream
+    // se der erro antes do 1º delta — mesmo contrato dos provedores de nuvem).
+    if (streaming) return readOllamaNdjson(res, onDelta!);
 
     const data = await res.json();
     const content = data.message?.content ?? '';
     if (!content) {
       console.warn(`[Ollama] empty content. data=${JSON.stringify(data).slice(0, 300)}`);
     }
-    return content;
+    // Chat não-streamado: se o Ollama separou o pensamento (message.thinking), reanexa
+    // como <think> pra UI mostrar o chip 💭. Modo agente fica só com o content (JSON).
+    const th = !isAgentMode ? (data.message?.thinking ?? '') : '';
+    return th ? `<think>${th}</think>${content}` : content;
   }
 }

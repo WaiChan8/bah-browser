@@ -167,13 +167,14 @@ export function getInitialShortcutAction(command: string): { action: { type: 'na
   // on a results page full of Shorts and the agent then picks a random clip. The
   // download_video { query } action finds + downloads the right result by itself
   // (with a duration filter), so let the agent go straight to it.
-  const isDownloadMedia = /\b(baix\w*|download|downloading|salv\w*|baixar|save|saving|get|grab)\b/.test(normalizedCommand)
-    && /\b(musica|video|videos|audio|som|clipe|cancao|mp3|mp4|m[uú]sica|v[ií]deo|song|songs|track|movie|clip|sound)\b/.test(normalizedCommand);
+  const isDownloadMedia = /\b(baix\w*|baj\w*|download|downloading|salv\w*|descarg\w*|guard\w*|pega\w*|quiero|save|saving|get|grab|fetch)\b/.test(normalizedCommand)
+    && /\b(musica|musicas|music|video|videos|vid|audio|audios|som|clipe|cancao|cancoes|cancion|canciones|faixas?|temas?|mp3|mp4|song|songs|track|tracks|tunes?|movie|movies|filmes?|films?|peliculas?|peli|clip|sound)\b/.test(normalizedCommand);
   if (isDownloadMedia) return null;
 
-  // Criar playlist: NÃO fast-path pro YouTube — deixa o agente emitir create_playlist
-  // (monta a playlist por URL), em vez de só abrir a busca do YouTube.
-  if (/\bplaylist\b/.test(normalizedCommand) && /\b(cri\w+|mont\w+|fa[cz]\w+|gera\w+|junt\w+|creat\w+|make|made|build|generat\w+|add)\b/.test(normalizedCommand)) return null;
+  // Criar playlist: NÃO fast-path pro YouTube — o detectQuickAction (ou o modelo, no
+  // fallback) emite create_playlist e monta a playlist por URL, em vez de só abrir busca.
+  if (/\b(playlist|play\s?list|lista\s+de\s+(?:reproducao|reproduccion|musicas?|canciones))\b/.test(normalizedCommand)
+      && /\b(cri\w+|crea\w*|mont\w+|arm\w+|fa[cz]\w+|haz(?:me)?\b|hacer\b|gera\w+|junt\w+|adicion\w+|separ\w+|prepar\w+|quero|queria|quiero|creat\w+|make|made|build|generat\w+|put\s+together|add)\b/.test(normalizedCommand)) return null;
 
   if (normalizedCommand.includes('gmail') && /mandar|enviar|escrever|email|e-mail|compose|send|write/.test(normalizedCommand)) {
     return {
@@ -235,7 +236,10 @@ export type QuickAction =
   | { type: 'google_news'; query: string }
   | { type: 'harvest_images'; query: string; count?: number; min_width?: number }
   | { type: 'generate_image'; prompt: string; count?: number }
-  | { type: 'find_file'; query: string; filetype: string };
+  | { type: 'find_file'; query: string; filetype: string }
+  // Playlist determinística: com songs[] (usuário listou) OU artist+count (o executor
+  // resolve as top-N faixas no YouTube via resolveManyVideos — sem depender do modelo).
+  | { type: 'create_playlist'; songs: string[]; artist?: string; count?: number; name?: string; private?: boolean };
 
 const NUM_WORDS: Record<string, number> = {
   dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, doze: 12, quinze: 15, vinte: 20, trinta: 30, cinquenta: 50, cem: 100,
@@ -247,10 +251,10 @@ const NUM_WORDS: Record<string, number> = {
 
 // "baixe 3 músicas...", "baixe vinte músicas..." → quantos arquivos pegar (default 1).
 function parseCount(n: string): number {
-  const NOUN = '(?:musicas?|videos?|cancao|cancoes|clipes?|sons?|mp3|mp4|songs?|tracks?|clips?|movies?|sounds?)';
+  const NOUN = '(?:musicas?|music|videos?|cancao|cancoes|cancion(?:es)?|faixas?|temas?|clipes?|sons?|audios?|mp3|mp4|songs?|tracks?|tunes?|clips?|movies?|filmes?|films?|peliculas?|sounds?)';
   const d = n.match(new RegExp('\\b(\\d{1,3})\\s+' + NOUN));
   if (d) return Math.min(Math.max(parseInt(d[1], 10), 1), 50);   // teto de seguranca 50
-  const w = n.match(new RegExp('\\b(dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|doze|quinze|vinte|trinta|cinquenta|cem|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen|twenty|thirty|fifty|hundred)\\s+' + NOUN));
+  const w = n.match(new RegExp('\\b(dois|duas|dos|tres|quatro|cuatro|cinco|seis|sete|siete|oito|ocho|nove|nueve|dez|diez|doze|quinze|vinte|trinta|cinquenta|cem|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen|twenty|thirty|fifty|hundred)\\s+' + NOUN));
   if (w) return Math.min(NUM_WORDS[w[1]] || 1, 50);
   return 1;
 }
@@ -269,12 +273,17 @@ function stripAgentMeta(s: string): string {
 const QUICK_STRIP = new Set(
   ('baixar baixa baixe baixame baixar download salvar salva salve pega pegue quero queria gostaria me ' +
    'pra para mim por favor o a os as um uma uns umas de do da dos das e em no na ' +
-   'mp3 mp4 musica musicas audio video videos som cancao cancoes clipe clipes clip clips arquivo arquivos ' +
+   'mp3 mp4 musica musicas music audio audios video videos vid som sons cancao cancoes clipe clipes clip clips arquivo arquivos ' +
+   'faixa faixas tema temas filme filmes documentario ' +
    'qualidade boa alta maxima otima hd 4k uhd fullhd baixa resolucao resolução menor low 360p 480p 720p 1080p ruim ' +
    'pdf documento documentos planilha planilhas manual manuais apostila ebook livro formato ' +
+   // ES — só VERBOS/nouns de download que poluem a query ("descarga la canción…").
+   // Artigos (la/el/los/las) NÃO entram: fazem parte de títulos ("La La Land").
+   'descarga descargar descargue descargame baja bajar bajame guarda guardar guardame quiero ' +
+   'cancion canciones pelicula peliculas peli ' +
    // EN — stopwords seguras pra não poluir a query (só removem ruído, não disparam ação).
    'save get grab fetch want need please my the of for to in on by this that some ' +
-   'song songs track tracks file files movie movies sound sounds quality best high res resolution')
+   'song songs track tracks tune tunes file files movie movies film films sound sounds quality best high res resolution')
     .split(' '));
 
 // "na melhor qualidade", "qualidade boa", "em hd/4k" → best quality. Must be detected
@@ -285,7 +294,7 @@ const QUALITY_RE = /\b(?:n[ao]|em|com|de|in)?\s*(?:(?:melhor|boa|alta|m[aá]xima
 // QUALITY_RE fica só pros .replace() (que precisam do /g e zeram lastIndex sozinhos).
 const QUALITY_TEST_RE = new RegExp(QUALITY_RE.source, 'i');
 
-export function detectQuickAction(command: string, opts?: { forceImage?: boolean }): QuickAction | null {
+export function detectQuickAction(command: string, opts?: { forceImage?: boolean; localMode?: boolean }): QuickAction | null {
   // MODO IMAGEM (caixinha do chat marcada): trata o texto INTEIRO como prompt de imagem,
   // sem depender de palavra-gatilho/idioma. Vem antes de tudo (até de URL) — marcou, é imagem.
   if (opts?.forceImage) {
@@ -299,10 +308,73 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
   if (commandHasExplicitUrl(command)) return null;
   let n = normalize(command);
 
-  // CRIAR PLAYLIST é tarefa do agente (o modelo nomeia as músicas → create_playlist).
-  // Guarda no TOPO: "crie uma playlist e SALVE 10 MÚSICAS" tem 'salve'/'musicas'/'10',
-  // que o detector de download capturaria por engano (vira download_video 10x). 0 captura aqui.
-  if (/\bplaylist\b/.test(n) && /\b(cri\w+|mont\w+|fa[cz]\w+|gera\w+|junt\w+|adicion\w+|creat\w+|make|made|build|generat\w+|add)\b/.test(n)) return null;
+  // CRIAR PLAYLIST — atalho DETERMINÍSTICO **só no modo LOCAL** (modelo fraco tipo qwen3/
+  // gpt-oss falha em criar playlist → a "mão" resolve top-N e monta). No modo NUVEM
+  // (DeepSeek) NÃO intercepta: o modelo forte CURA as músicas de verdade (playlist melhor
+  // que uma busca top-N) — respeita [[local-nao-mexer-na-api]]. Em AMBOS os modos, um
+  // comando de criar playlist NUNCA cai no detector de download (retorna null → modelo).
+  // Precisa ficar no TOPO: "crie uma playlist e SALVE 10 MÚSICAS" tem 'salve'+'músicas'.
+  {
+    const PL_NOUN = /\b(playlist|play\s?list|lista\s+de\s+(?:reproducao|reproduccion|musicas?|canciones))\b/;
+    // Verbos de CRIAR. 'adicion/add' saíram (isso é mexer numa playlist existente). 'quero/
+    // queria/quiero' FICAM (pra "quero uma playlist do Djavan"), mas os guards abaixo barram
+    // "quero OUVIR minha playlist" (abrir) e "quero adicionar…" (mexer numa existente).
+    const PL_VERB = /\b(cri\w+|crea\w*|creame\b|mont\w+|arm\w+|fa[cz]\w+|haz(?:me)?\b|hacer\b|gera\w+|junt\w+|separ\w+|prepar\w+|quero|queria|quiero|creat\w+|make|made|build|generat\w+|put\s+together)\b/;
+    // BAIL (deixa pro modelo): (a) é PERGUNTA — "como criar uma playlist?"; (b) quer ABRIR
+    // uma EXISTENTE — verbo de ouvir/abrir + "minha/sua playlist"; (c) ADICIONAR a uma
+    // existente — "adiciona X na playlist". Nenhum desses é "criar do zero".
+    const PL_QUESTION = /\b(como|o\s?que|oque|qual|quais|porque|por\s?que|how|what|which|why|when|where|cual|c[oó]mo|cu[aá]ndo)\b/.test(n) || /\?\s*$/.test(command);
+    const PL_OPEN_EXISTING = /\b(ouv\w*|escu(?:t|ch)\w*|oye\b|oir\b|abr\w+|toc\w+|toqu\w+|reprodu\w+|open|play|listen\w*)\b/.test(n)
+      && /\b(minha|meu|sua|seu|mi|tu|su|my|your|aquela|essa|esta|the)\s+(?:play\s?list|playlist|lista)\b/.test(n);
+    const PL_ADD_EXISTING = /\b(adicion\w+|acrescent\w+|p[oõ]e\b|poe\w*|bota\w*|add|a[nñ]ad\w*|agreg\w*)\b/.test(n)
+      && /\b(?:na|no|a|à|ao|em|to|in|en)\s+(?:minha|meu|sua|seu|mi|my|the|essa|esta|aquela)?\s*(?:play\s?list|playlist|lista)\b/.test(n);
+    if (PL_NOUN.test(n) && PL_VERB.test(n)) {
+      // Pergunta / abrir existente / adicionar → sempre pro modelo (nunca vira download).
+      if (PL_QUESTION || PL_OPEN_EXISTING || PL_ADD_EXISTING) return null;
+      // Nuvem/API (DeepSeek): cede pro modelo curar as músicas. Só o LOCAL usa o atalho.
+      if (!opts?.localMode) return null;
+      const sp1 = n.replace(/([a-z])(\d)/g, '$1 $2');
+      const nRaw = parseCount(sp1);
+      // Nome ("com o nome X", "chamada X") + privacidade → vão na PRÓPRIA action (o
+      // executor não re-parseia: evita nome-lixo "Treino com 8 músicas do Eminem").
+      // Lazy + lookahead: captura SÓ o nome, parando em com/with/que/privada/…
+      const NAME_RE = /\b(?:nome|chamad[ao]|chame\s+de|t[ií]tulo|titulo|named?|called|llamad[ao])\s*:?\s*["'“”]?([^\n"'“”,]{1,40}?)(?=\s+(?:com|with|con|que|e\s|and\s|y\s|privad\w*|particular|secret\w*|private)|["'“”,]|$)/i;
+      const nameHit = stripAgentMeta(command).match(NAME_RE);
+      const plName = nameHit ? nameHit[1].trim() : '';
+      const wantPrivate = /\b(privad[ao]|particular|secret[ao]|private|s[oó]\s+(?:pra|para)\s+mim)\b/.test(n);
+      const rawNoName = stripAgentMeta(command).replace(NAME_RE, ' ');
+      // Usuário ENUMEROU as músicas? ("com Hit'em Up, California Love e Changes"). Trava
+      // conservadora: sem "N músicas", com vírgula, SEM marcador de descrição (tipo/estilo/
+      // gênero/like), o 1º item não pode ser genérico (músicas/canciones/…) e a lista não
+      // pode ser toda de palavras soltas (senão "rock, pop e mpb" viraria 3 "músicas").
+      let songs: string[] = [];
+      const descMark = /\b(tipo|estilo|g[eê]?ner[oa]|g[eé]nero|like|such\s+as|kind\s+of|estilo\s+de)\b/i.test(rawNoName);
+      if (nRaw <= 1 && rawNoName.includes(',') && !descMark) {
+        const listPart = rawNoName.split(/\b(?:com|with|con)\b/i).slice(1).join(' ');
+        const items = listPart.split(/,|\se\s|\sy\s|\sand\s|&/i).map(s => s.trim()).filter(s => s.length >= 2 && s.length <= 80).slice(0, 25);
+        // Genéricos que denunciam "lista de vibe" e não títulos ("com músicas de rock…").
+        // NÃO inclui hits/sucessos/top — colidiriam com títulos reais ("Hit 'em Up").
+        const GENERIC = /^(musicas?|music|cancao|cancoes|cancion(?:es)?|song|songs|track|tracks|faixas?|temas?|som|sons|video|videos|clipes?|clips?)\b/i;
+        const firstOk = items[0] && !GENERIC.test(normalize(items[0]));
+        const anyMultiWord = items.some(s => s.trim().split(/\s+/).length >= 2);
+        if (items.length >= 2 && firstOk && anyMultiWord) songs = items;
+      }
+      // Artista/tema: remove o par "N músicas" (dígito OU por extenso), os termos de
+      // playlist e stopwords — o que sobra é o tema. Dígitos soltos FICAM ("anos 80").
+      const CNT_RE = new RegExp('\\b(\\d{1,3}|' + Object.keys(NUM_WORDS).join('|') + ')\\s+(musicas?|music|cancao|cancoes|cancion(?:es)?|songs?|tracks?|faixas?|temas?|videos?|clipes?|clips?|tunes?)\\b', 'gi');
+      const PL_STRIP = new Set(('playlist playlists play list lista listas reproducao reproduccion cria crie criar crea crear creame cria-la arma arme armar armame monta monte montar faz faca fazer haz hazme hacer gera gere gerar junta junte juntar separa separe separar prepara prepare preparar create creates make made build building generate generating put together named called nome chamada chamado chame titulo llamada llamado ' +
+        'com with con de do da dos das del la el las los the of by para pra e and y uma um una one a o as os minha meu mi my sua seu tu su nova novo new ' +
+        'essa esse esta este isso aquela aquele na no nas nos em ao aos que ' +
+        'musica musicas music cancao cancoes cancion canciones song songs track tracks faixa faixas tema temas tune tunes ' +
+        'privada privado particular secreta secreto private salva salve salvar guarda guarde guardar save tocando favor').split(' '));
+      const artist = rawNoName.replace(CNT_RE, ' ').split(/\s+/)
+        .filter(w => { const wn = normalize(w).replace(/[.,!?;:'"]+$/g, '').replace(/^[.,!?;:'"]+/g, ''); return wn && !PL_STRIP.has(wn); })
+        .join(' ').replace(/[,;:!?]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+      if (songs.length >= 2) return { type: 'create_playlist', songs, count: songs.length, name: plName || undefined, private: wantPrivate || undefined };
+      if (artist.length >= 2) return { type: 'create_playlist', songs: [], artist, count: Math.min(Math.max(nRaw > 1 ? nRaw : 10, 2), 12), name: plName || undefined, private: wantPrivate || undefined };
+      return null;   // sem tema e sem lista → deixa o modelo nomear as músicas
+    }
+  }
 
   // "faça um supercut de X", "10 pessoas falando 'Y'" → LOCALIZA onde a frase é dita e
   // ABRE cada vídeo numa aba pausada no segundo exato (open_video_cuts). Não baixa mais os
@@ -355,12 +427,12 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
   // (Diferente de search_images, que traz poucas e "limpas".) ANTES de outras regras.
   {
     const sp = n.replace(/([a-z])(\d)/g, '$1 $2'); // "baixe10 imagens" → "baixe 10 imagens"
-    if (/\b(imagens|fotos|imagem|imagenes|fotografias|figuras|wallpapers?|papeis?\s+de\s+parede|images?|photos?|pictures?|pics?)\b/.test(sp)
-        && /\b(baix\w*|quero|queria|salv\w*|pega\w*|arruma|me\s+da|junta|colhe|coleta|descarg\w*|quiero|guard\w*|download|downloading|want|save|saving|get|getting|grab|grabbing|fetch)\b/.test(sp)
+    if (/\b(imagens?|imagem|imagen(?:e?s)?|fotos?|fotografias?|figuras?|wallpapers?|pap(?:el|eis)\s+de\s+parede|images?|photos?|pictures?|pics?)\b/.test(sp)
+        && /\b(baix\w*|baj\w*|quero|queria|precis\w*|arranj\w*|consegue|consiga|salv\w*|pega\w*|arruma|me\s+da|junta|colhe|coleta|descarg\w*|quiero|guard\w*|download|downloading|want|need|save|saving|get|getting|grab|grabbing|fetch)\b/.test(sp)
         && !/\b(desta|dessa|deste|desse|nesta|nessa|aqui|daqui|da\s+p[aá]gina|do\s+site|this\s+page|from\s+(this|the)\s+page|on\s+(this|the)\s+page|here|current\s+page|esta\s+p[aá]gina)\b/.test(sp)) {
       // quantidade: dígito ("3") OU por extenso ("tres") OU "varias/um monte". N>=2.
       const IMG_NUM: Record<string, number> = { uma: 1, duas: 2, dois: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, doze: 12, quinze: 15, vinte: 20, trinta: 30, cinquenta: 50, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, fifty: 50 };
-      const noun = '(imagens|imagenes|fotos|imagem|foto|figuras|wallpapers?|images?|photos?|pictures?|pics?)';
+      const noun = '(imagens?|imagen(?:e?s)?|fotos?|imagem|fotografias?|figuras?|wallpapers?|images?|photos?|pictures?|pics?)';
       const dm = sp.match(new RegExp('\\b(\\d{1,3})\\s+' + noun));
       const wm = sp.match(new RegExp('\\b(uma|duas|dois|tres|quatro|cinco|seis|sete|oito|nove|dez|doze|quinze|vinte|trinta|cinquenta|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen|twenty|thirty|fifty)\\s+' + noun));
       const many = /\b(varias|varios|um\s+monte|monte\s+de|diversas|v[aá]rias|several|many|a\s+bunch|bunch\s+of|lots?\s+of|a\s+lot)\b/.test(sp);
@@ -472,12 +544,12 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
   {
     const sp = n.replace(/([a-z])(\d)/g, '$1 $2');
     const isDl = /\b(baix\w*|download|downloading|salv\w*|save|saving)\b/.test(sp);
-    const watchVerb = /\b(abr\w+|mostr\w+|toc\w+|toqu\w+|coloc\w+|coloqu\w+|p[oõ]e\b|pon\b|poner\b|pong\w+|ponme\b|bota\w*|reprodu\w+|assist\w+|open\w*|play\w*|show\w*|watch\w*)\b/.test(sp);
-    const mediaWord = /\b(video|videos|clipe|clipes|musica|musicas|cancao|cancoes|cancion|canciones|song|songs|track|tracks|clip|clips)\b/.test(sp);
-    const cm = sp.match(/\b(\d{1,2}|duas|dois|dos|tres|quatro|cuatro|cinco|seis|sete|siete|oito|ocho|nove|nueve|dez|diez|two|three|four|five|six|seven|eight|nine|ten)\s+(?:abas?|guias?|tabs?|musicas?|videos?|cancoes|canciones|clipes?|songs?|tracks?|clips?)\b/);
+    const watchVerb = /\b(abr\w+|mostr\w+|toc\w+|toqu\w+|coloc\w+|coloqu\w+|p[oõ]e\b|pon\b|poner\b|pong\w+|ponme\b|ponte\b|bota\w*|reprodu\w+|assist\w+|ouv\w*|escu(?:t|ch)\w*|oye\b|oir\b|open\w*|play\w*|show\w*|watch\w*|listen\w*)\b/.test(sp);
+    const mediaWord = /\b(video|videos|clipe|clipes|musica|musicas|music|cancao|cancoes|cancion|canciones|faixas?|temas?|song|songs|track|tracks|tunes?|clip|clips)\b/.test(sp);
+    const cm = sp.match(/\b(\d{1,2}|duas|dois|dos|tres|quatro|cuatro|cinco|seis|sete|siete|oito|ocho|nove|nueve|dez|diez|two|three|four|five|six|seven|eight|nine|ten)\s+(?:abas?|guias?|tabs?|musicas?|videos?|cancoes|canciones|faixas?|temas?|clipes?|songs?|tracks?|tunes?|clips?)\b/);
     const cnt = cm ? (NUM_WORDS[cm[1]] || parseInt(cm[1], 10) || 0) : 0;
     if (!isDl && watchVerb && mediaWord && cnt >= 2) {
-      const STRIP = new Set(('abre abra abrir mostra mostre mostrar toca tocar toque coloca colocar coloque poe poem pon poner ponme ponga bota botar reproduz reproduzir reproducir reproduce assistir assista navegador aba abas guia guias cada uma com no na do da de dos das o a os as e em uns umas un una open play show watch tab tabs each one with in on the of a an song songs track tracks video videos clip clips musica musicas cancao cancoes cancion canciones clipe clipes filme').split(' '));
+      const STRIP = new Set(('abre abra abrir mostra mostre mostrar toca tocar toque coloca colocar coloque poe poem pon poner ponme ponga ponte bota botar reproduz reproduzir reproducir reproduce assistir assista ouvir ouca ouve escuta escutar escute escucha escuchar oye oir navegador aba abas guia guias cada uma com no na do da de dos das o a os as e em uns umas un una open play show watch listen tab tabs each one with in on the of a an song songs track tracks tune tunes video videos clip clips musica musicas music cancao cancoes cancion canciones faixa faixas tema temas clipe clipes filme').split(' '));
       const q = stripAgentMeta(command).replace(/([a-z])(\d)/gi, '$1 $2').split(/\s+/)
         .filter(w => { const nw = normalize(w); return w && !STRIP.has(nw) && !/^\d{1,2}$/.test(nw) && !(nw in NUM_WORDS); })
         .join(' ').trim();
@@ -492,17 +564,23 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
   {
     const isDownload = /\b(baix\w*|download|downloading|salv\w*|save|saving)\b/.test(n);
     const phraseCue = /\b(onde\s+(?:falam|dizem|aparece)|frase|supercut|trecho|where\s+(?:they\s+)?(?:say|says)|phrase)\b/.test(n);  // → open_video_cuts, não isso
+    // "veja o vídeo DESTA PÁGINA" fala da aba atual — abrir um vídeo aleatório do YouTube
+    // seria sequestro. Cede pro agente/modelo, que enxerga a página.
+    const pageCue = /\b(desta|dessa|deste|desse|da\s+pagina|do\s+site|dessa\s+aba|this\s+page|the\s+page|current\s+(?:page|tab)|on\s+screen)\b/.test(n);
     // toc\w+ pega "tocar/toca" mas NÃO "toque" (t-o-q-u-e); idem coloc/coloque → cobre os dois.
-    const watchVerb = /\b(mostr\w+|veja|vejam|assist\w+|abr\w+|toc\w+|toqu\w+|coloc\w+|coloqu\w+|reprodu\w+|bota\b|botar\b|p[oõ]e\b|poem\b|pon\b|poner\b|pong\w+|ponme\b|quero\s+ver|quiero\s+ver|ver\s+(?:un|una|um|uma)\b|watch|watching|play|playing|open|opening|show|showing|see|put\s+on)\b/.test(n);
-    const mediaWord = /\b(video|videos|clipe|clipes|musica|musicas|cancao|cancion|canciones|filme|tutorial|aula|show|song|songs|track|movie|clip|clips)\b/.test(n);
+    const watchVerb = /\b(mostr\w+|veja|vejam|assist\w+|abr\w+|toc\w+|toqu\w+|coloc\w+|coloqu\w+|reprodu\w+|bota\b|botar\b|p[oõ]e\b|poem\b|pon\b|poner\b|pong\w+|ponme\b|ponte\b|ouv\w*|escu(?:t|ch)\w*|oye\b|oir\b|quero\s+ver|quiero\s+ver|ver\s+(?:un|una|um|uma)\b|watch|watching|play|playing|open|opening|show|showing|see|listen\w*|put\s+on)\b/.test(n);
+    // 'show' fora: colide com "ir no show"/"comprar ingresso do show" (concerto físico).
+    const mediaWord = /\b(video|videos|clipe|clipes|musica|musicas|music|cancao|cancoes|cancion|canciones|faixas?|temas?|filmes?|films?|peliculas?|peli|tutorial|aula|song|songs|track|tracks|tunes?|movie|clip|clips)\b/.test(n);
     const someoneDoing = /\b(mostr\w+|veja|quero\s+ver|show\s+me|i\s+want\s+to\s+see|watch)\b/.test(n)
       && /\b(alguem|gente|como|someone|somebody|people|how\s+to)\b/.test(n)
       && /\b(faz\w+|fazendo|cozinh\w+|prepar\w+|toc\w+|jog\w+|consert\w+|troc\w+|ensin\w+|dan[cç]\w+|cant\w+|pint\w+|desenh\w+|making|doing|cooking|preparing|playing|fixing|changing|teaching|dancing|singing|painting|drawing)\b/.test(n);
-    if (!isDownload && !phraseCue && ((watchVerb && mediaWord) || someoneDoing)) {
+    if (!isDownload && !phraseCue && !pageCue && ((watchVerb && mediaWord) || someoneDoing)) {
       const STRIP = new Set(('mostre mostra mostrar mostrem me te ver veja vejam quero queria quiero assistir assista abre abra abrir ' +
-        'toca tocar toque coloca colocar coloque poe poem bota botar pon poner ponme ponga reproduz reproduzir reproducir reproduce alguem gente algum alguma ' +
-        'um uma uns umas un una o a os as de do da dos das video videos clipe clipes musica musicas cancao cancion canciones filme tutorial aula show por favor pra para ' +
-        'watch play open show see put on someone somebody people how to a an the of for me i want to song songs track movie clip clips').split(' '));
+        'toca tocar toque coloca colocar coloque poe poem bota botar pon poner ponme ponga ponte reproduz reproduzir reproducir reproduce alguem gente algum alguma ' +
+        'ouvir ouca ouve escuta escutar escute escucha escuchar oye oir ' +
+        'um uma uns umas un una o a os as de do da dos das video videos clipe clipes musica musicas music cancao cancoes cancion canciones faixa faixas tema temas filme filmes film films pelicula peliculas peli tutorial aula show por favor pra para ' +
+        'algum alguma alguns algumas algo qualquer some any unos unas ' +
+        'watch play open show see listen listening put on someone somebody people how to a an the of for me i want to song songs track tracks tune tunes movie clip clips').split(' '));
       const q = stripAgentMeta(command).split(/\s+/)
         .filter(w => { const nw = normalize(w); return w && !STRIP.has(nw); })
         .join(' ').trim();
@@ -515,14 +593,29 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
   const wantsLow = /\b(baixa\s+(resolu[cç][aã]o|qualidade)|menor\s+(resolu[cç][aã]o|qualidade)|resolu[cç][aã]o\s+baixa|low|360p?|480p?|pode\s+ser\s+ruim|qualidade\s+ruim|low\s+(?:res|quality|resolution)|bad\s+quality)\b/.test(n);
   const quality: 'best' | 'low' | undefined = wantsLow ? 'low' : (QUALITY_TEST_RE.test(n) ? 'best' : undefined);
   if (quality) n = n.replace(QUALITY_RE, ' ').replace(/\s+/g, ' ').trim();
-  // Não sequestrar perguntas / pesquisa / tutoriais ("como baixar", "qual o melhor app")
-  if (/\b(como|o que|oque|qual|quais|porque|por que|melhor|recomend\w*|tutorial|ensina|explica|aprende|significa|diferenca|site|aplicativo|app|programa|how|what|which|why|best|recommend\w*|teaches?|explains?|software|program)\b/.test(n)) return null;
+  // CONTROLE da mídia (não é download) — "baixa/abaixa o volume", "baja el volumen",
+  // "diminui o brilho", "baixa a velocidade". 'baixa/baja' aqui é ABAIXAR, não BAIXAR.
+  // Cede pro agente (que mexe na página). Cobre PT e ES; conserta um buraco pré-existente.
+  if (/\b(volume|volumen|brilho|brillo|brightness|velocidade|velocidad|speed|zoom)\b/.test(n)
+      && /\b(baix\w*|baj\w*|abaix\w*|abaj\w*|diminu\w*|aument\w*|sub\w*|lower|raise|turn|increase|decrease)\b/.test(n)) return null;
+  // TEMA = aparência da UI ("mudar o tema", "cambiar el tema"), não faixa de música. Só
+  // cede quando o verbo é de TROCAR/personalizar tema — "descarga el tema de Rosalía"
+  // (baixar a faixa) segue normal, porque ali não tem verbo de mudar tema.
+  if (/\btema\b/.test(n) && /\b(mud\w*|troc\w*|cambi\w*|altera\w*|muda\w*|change|switch|personaliz\w*|customiz\w*)\b/.test(n)) return null;
 
-  const hasGet = /\b(baix\w*|download|downloading|salv\w*|pega\w*|quero|queria|gostaria|arruma|consegue|descarg\w*|quiero|guard\w*|save|saving|get|getting|grab|grabbing|fetch|want|need)\b/.test(n);
+  // Não sequestrar perguntas / pesquisa / tutoriais ("como baixar", "qual o melhor app").
+  const hasHardDl = /\b(baix\w*|baj\w*|download|downloading|salv\w*|descarg\w*|guard\w*|save|saving|grab|grabbing|fetch)\b/.test(n);
+  if (/\b(como|o que|oque|qual|quais|porque|por que|tutorial|ensina|explica|aprende|significa|diferenca|site|aplicativo|app|programa|how|what|which|why|teaches?|explains?|software|program)\b/.test(n)) return null;
+  // "melhor/best/top/recomenda" SEM verbo forte de baixar = recomendação ("quero o melhor
+  // filme de 2024") → deixa pro modelo. Mas "baixe a melhor música do Queen" (tem 'baixe')
+  // é download legítimo e passa. 'quero/want' sozinho não conta como verbo forte.
+  if (/\b(melhor(es)?|mejor(es)?|best|top|recomend\w*|recommend\w*)\b/.test(n) && !hasHardDl) return null;
+
+  const hasGet = /\b(baix\w*|baj\w*|download|downloading|salv\w*|pega\w*|quero|queria|gostaria|arruma|consegue|descarg\w*|quiero|guard\w*|save|saving|get|getting|grab|grabbing|fetch|want|need)\b/.test(n);
   // "quero VER o vídeo" / "quero OUVIR a música" é consumo, não download — só
   // sequestra se houver verbo explícito de baixar junto.
   const hasWatch = /\b(ver|assistir|veja|assista|olh\w*|ouvir|escut\w*|toc\w*|coloc\w*|abr\w*|watch|watching|see|seeing|view|viewing|listen|listening|play|playing|open|opening)\b/.test(n);
-  const hasDl = /\b(baix\w*|download|downloading|salv\w*|arquiv\w*|descarg\w*|guard\w*|save|saving|file)\b/.test(n);
+  const hasDl = /\b(baix\w*|baj\w*|download|downloading|salv\w*|arquiv\w*|descarg\w*|guard\w*|save|saving|file)\b/.test(n);
   const wantsDownload = hasDl || (hasGet && !hasWatch);
   const count = parseCount(n);
   // Drop helper words, the count digit (e.g. "3"), number-words and quality words so they
@@ -534,9 +627,9 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
   // ARQUIVAR A PÁGINA ATUAL — "baixe o vídeo/áudio desta página", "arquive esse vídeo",
   // "baixe o vídeo daqui". Sem assunto = mídia da aba aberta → download_video sem query
   // (o handler usa a URL atual). Instantâneo, 0 tokens.
-  if (wantsDownload && /\b(video|audio|musica|mp3|mp4|clipe|filme|som|song|track|movie|clip|sound)\b/.test(n)
+  if (wantsDownload && /\b(video|vid|audio|musica|music|mp3|mp4|clipe|filme|film|pelicula|peli|som|cancao|cancion|faixa|tema|song|track|tune|movie|clip|sound)\b/.test(n)
       && /\b(desta|dessa|deste|desse|esta|essa|este|esse|aqui|daqui|dali|atual|da\s+pagina|do\s+site|dessa\s+aba|que\s+(esta|ta)\s+(aberto|tocando|na\s+tela)|this|here|current|the\s+(page|site|tab|video)|on\s+(?:screen|the\s+page)|playing)\b/.test(n)) {
-    return { type: 'download_video', query: '', audio_only: /\b(audio|musica|mp3|som|song|track|sound)\b/.test(n) };
+    return { type: 'download_video', query: '', audio_only: /\b(audio|musica|music|mp3|som|cancao|cancion|faixa|tema|song|track|tune|sound)\b/.test(n) };
   }
 
   // ARQUIVO (pdf/doc/xls/ppt) — mais específico primeiro
@@ -549,14 +642,16 @@ export function detectQuickAction(command: string, opts?: { forceImage?: boolean
     if (q.length >= 3) return { type: 'find_file', query: q, filetype };
   }
 
-  // MÚSICA (mp3 / música / áudio) — dispara com mp3 OU com intenção de download
-  if (/\b(mp3|musica|musicas|audio|som|cancao|cancion|canciones|song|songs|track|tracks|sound)\b/.test(n) && (wantsDownload || /\bmp3\b/.test(n))) {
+  // MÚSICA (mp3 / música / áudio) — dispara com mp3 OU com intenção de download.
+  // 'tema(s)' = faixa em ES; o guard de tema-UI lá em cima já barrou "mudar o tema".
+  if (/\b(mp3|musica|musicas|music|audio|audios|som|sons|cancao|cancoes|cancion|canciones|faixas?|temas?|song|songs|track|tracks|tunes?|sound)\b/.test(n) && (wantsDownload || /\bmp3\b/.test(n))) {
     const q = cleanQuery();
     if (q.length >= 2) return { type: 'download_video', query: q, audio_only: true, count };
   }
 
-  // VÍDEO (mp4 / vídeo / clipe) — exige intenção de download (evita "veja o vídeo")
-  if (/\b(mp4|video|videos|clipe|clipes|clip|clips|movie|movies)\b/.test(n) && wantsDownload) {
+  // VÍDEO (mp4 / vídeo / clipe / filme) — exige intenção de download (evita "veja o vídeo").
+  // 'show(s)' fora: colide com "ir no show"/"assistir ao show" (concerto/programa).
+  if (/\b(mp4|video|videos|vid|clipe|clipes|clip|clips|filmes?|films?|peliculas?|peli|movie|movies|documentarios?)\b/.test(n) && wantsDownload) {
     const q = cleanQuery();
     if (q.length >= 2) return { type: 'download_video', query: q, count, quality };
   }
