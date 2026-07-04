@@ -1319,10 +1319,15 @@ Answer with one word: ACTION, PAGE, WEB, or CHAT.`;
                 // QUICK INTENT: layperson media/file requests ("mp3 musica X", "baixe o
                 // pdf de Y") → execute the right action at step 0 WITHOUT calling the AI.
                 // weakModel: o atalho determinístico de PLAYLIST só entra quando a IA ativa é
-                // FRACA — modo local (Ollama) OU nuvem keyless (Pollinations, o gpt-oss grátis).
-                // Só com uma chave de nuvem de verdade (DeepSeek etc.) é que cedemos pro modelo
-                // forte curar as músicas. Sem chave = keyless = fraco → precisa do atalho.
-                const weakModel = store.localSettings.enabled || !store.aiSettings.apiKey?.trim();
+                // FRACA. A IA é FORTE só quando há uma chave de nuvem de verdade EM USO — não
+                // local, NÃO pausada, com chave, e não-Pollinations (que é sempre gpt-oss fraco,
+                // com chave ou sem). Espelha activeAiLabel(). Senão (local Ollama, API pausada,
+                // sem chave, ou Pollinations) é FRACA → precisa do atalho. O bug antes: só olhava
+                // !apiKey e ignorava apiPaused (chave DeepSeek salva + API pausada = keyless fraco).
+                const s = store.aiSettings;
+                const strongCloud = !store.localSettings.enabled && !s.apiPaused
+                  && !!s.apiKey?.trim() && s.provider !== 'pollinations';
+                const weakModel = !strongCloud;
                 let quickAction = detectQuickAction(command, { forceImage: !!opts?.forceImage, weakModel });
                 // FOLLOW-UP sem IA: "e com a palavra bom dia?" / "agora com a frase X"
                 // reaproveita a intenção do pedido anterior trocando só o termo.
