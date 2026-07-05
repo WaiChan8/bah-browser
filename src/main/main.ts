@@ -950,23 +950,47 @@ function setupIPC(): void {
   ipcMain.handle('ollama:pull', async (e, model: string, baseUrl?: string) => {
     const u = new URL(`${ollamaUrl(baseUrl)}/api/pull`);
     const send = (p: any) => { try { e.sender.send('ollama:pull-progress', { model, ...p }); } catch {} };
+    // Traduz o erro cru do Ollama pra algo que o cliente entende e consegue agir.
+    const friendly = (raw: any): string => {
+      const s = String(raw || '').toLowerCase();
+      if (/file does not exist|does not exist|not found|no such model|unknown model/.test(s))
+        return `Model "${model}" not found. Check the exact name and tag at ollama.com/library (for example qwen3:14b).`;
+      if (/invalid model name/.test(s))
+        return `Invalid model name "${model}". Use the name:tag format, for example qwen3:14b.`;
+      if (/refused|econnrefused|dial tcp|no such host|getaddrinfo|timeout|timed out|network|proxy|\beof\b|reset|unreachable/.test(s))
+        return `Couldn't reach the Ollama library. Check your internet connection (and that Ollama is running), then try again.`;
+      return String(raw || 'download failed');
+    };
     return await new Promise((resolve) => {
-      let settled = false;
+      let settled = false, hadError = false, lastErr = '';
       let req: any = null;
+      let stall: ReturnType<typeof setTimeout> | null = null;
+      const clearStall = () => { if (stall) { clearTimeout(stall); stall = null; } };
       const finish = (result: any, progress?: any) => {
         if (settled) return; settled = true;
+        clearStall();
         if (progress) send(progress);
         if (activePull && activePull.req === req) activePull = null;
         resolve(result);
       };
+      // Trava de travamento: nenhum progresso por 2min = conexão presa (o stall que trava o
+      // pull em internet ruim). Aborta com mensagem clara em vez de pendurar a UI pra sempre.
+      const armStall = () => { clearStall(); stall = setTimeout(() => {
+        if (settled) return;
+        try { req?.destroy?.(); } catch {}
+        finish({ ok: false, error: 'stalled' }, { done: true, error: 'Download stalled (no progress for 2 min). Check your connection and try again.' });
+      }, 120000); };
       try {
         const http = require('http');
         req = http.request(
           { hostname: u.hostname, port: u.port || 11434, path: u.pathname, method: 'POST', headers: { 'Content-Type': 'application/json' } },
           (res: any) => {
+            const badStatus = !!(res.statusCode && res.statusCode >= 400);
             let buf = '';
             res.setEncoding('utf8');
+            armStall();
             res.on('data', (chunk: string) => {
+              armStall();
               buf += chunk;
               let nl: number;
               while ((nl = buf.indexOf('\n')) >= 0) {
@@ -974,25 +998,31 @@ function setupIPC(): void {
                 if (!line) continue;
                 try {
                   const o = JSON.parse(line);
-                  const pct = o.total ? Math.round((o.completed || 0) / o.total * 100) : undefined;
-                  send({ status: o.status, completed: o.completed, total: o.total, percent: pct });
-                  if (o.error) send({ done: true, error: o.error });
-                } catch {}
+                  if (o.error) { hadError = true; lastErr = friendly(o.error); send({ done: true, error: lastErr }); }
+                  else {
+                    const pct = o.total ? Math.round((o.completed || 0) / o.total * 100) : undefined;
+                    send({ status: o.status, completed: o.completed, total: o.total, percent: pct });
+                  }
+                } catch { /* linha parcial — ignora */ }
               }
             });
-            res.on('end', () => finish({ ok: true }, { done: true }));
+            res.on('end', () => {
+              // NÃO mascarar erro com sucesso: só manda "done ok" quando de fato não houve erro.
+              if (hadError || badStatus) finish({ ok: false, error: lastErr || friendly(buf || `HTTP ${res.statusCode}`) }, hadError ? undefined : { done: true, error: friendly(buf || `HTTP ${res.statusCode}`) });
+              else finish({ ok: true }, { done: true });
+            });
           },
         );
         activePull = { req, canceled: false };
         req.on('error', (err: any) => {
           if (activePull?.canceled) finish({ ok: false, canceled: true }, { done: true, canceled: true });
-          else finish({ ok: false, error: String(err?.message ?? err) }, { done: true, error: String(err?.message ?? err) });
+          else { const m = friendly(err?.message ?? err); finish({ ok: false, error: m }, { done: true, error: m }); }
         });
         // destroy() pode emitir só 'close' (sem 'error') — cobre o cancelamento.
         req.on('close', () => { if (activePull?.canceled) finish({ ok: false, canceled: true }, { done: true, canceled: true }); });
         req.write(JSON.stringify({ model, stream: true }));
         req.end();
-      } catch (e2: any) { finish({ ok: false, error: String(e2?.message ?? e2) }, { done: true, error: String(e2?.message ?? e2) }); }
+      } catch (e2: any) { const m = friendly(e2?.message ?? e2); finish({ ok: false, error: m }, { done: true, error: m }); }
     });
   });
   // Cancela o download em andamento (destrói a conexão → Ollama aborta o pull).
