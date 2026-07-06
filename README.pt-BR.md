@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Navegador com IA</b> — você fala em português, ele opera a web pra você.<br/>
-  Estilo <b>Perplexity Comet</b> · código aberto (source-available) · por <b>VilelaLab</b>.
+  Estilo <b>Perplexity Comet</b> · open source · por <b>VilelaLab</b>.
 </p>
 
 <p align="center">
@@ -191,20 +191,20 @@ O agente opera com privilégios de navegador, então vale deixar claro o que ele
 
 ## Licença
 
-**PolyForm Small Business 1.0.0** — veja o arquivo [LICENSE](LICENSE).
+**MIT** — veja o arquivo [LICENSE](LICENSE).
 
-Em resumo (não tem valor legal — vale o texto da licença):
+Em resumo:
 
-- ✅ **Livre** para uso pessoal, estudo, projetos próprios e **empresas pequenas** (menos de 100 pessoas **e** menos de US$ 1 milhão de faturamento no último ano).
-- ✅ Pode **modificar, melhorar e redistribuir**, mantendo este aviso de licença.
-- 💼 **Empresa grande / uso comercial acima desse porte** precisa de **licença comercial** — fale comigo em **alexmachadovilela@gmail.com**.
-- ❌ Sem garantia. Vem "como está".
+- Livre e open source.
+- Pode usar, modificar, redistribuir e usar comercialmente.
+- Mantenha o aviso de copyright e licença.
+- Sem garantia. Vem "como está".
 
 ---
 
 ## Contato
 
-- 📧 **Email** (dúvidas e licença comercial): **alexmachadovilela@gmail.com**
+- 📧 **Email**: **alexmachadovilela@gmail.com**
 - 🐦 **X / Twitter**: [@alexvilelaba](https://x.com/alexvilelaba)
 - 🐛 **Bugs / ideias**: [abra uma issue](https://github.com/alexvilelabah/bah-browser/issues)
 

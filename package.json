@@ -1,13 +1,13 @@
 {
   "name": "bah-browser",
   "version": "1.6.1",
-  "description": "AI-powered browser agent — navigate and manipulate the web with natural language",
+  "description": "Open-source AI browser agent — navigate and manipulate the web with natural language",
   "author": {
     "name": "Alex Vilela",
     "email": "alexmachadovilela@gmail.com",
     "url": "https://github.com/alexvilelabah"
   },
-  "license": "PolyForm-Small-Business-1.0.0",
+  "license": "MIT",
   "main": "dist/main/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:main\"",

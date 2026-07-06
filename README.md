@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>AI browser</b> — type in plain language, and the AI <b>autonomously</b> operates the web for you.<br/>
-  <b>Perplexity Comet</b> style · open / source-available · by <b>VilelaLab</b>.
+  <b>Perplexity Comet</b> style · open source · by <b>VilelaLab</b>.
 </p>
 
 <p align="center">
@@ -193,20 +193,20 @@ The agent runs with full browser privileges, so it's worth being clear about wha
 
 ## License
 
-**PolyForm Small Business 1.0.0** — see [LICENSE](LICENSE).
+**MIT** — see [LICENSE](LICENSE).
 
-In short (not legal advice — the license text rules):
+In short:
 
-- ✅ **Free** for personal use, study, your own projects, and **small businesses** (under 100 people **and** under US$1M revenue last year).
-- ✅ You may **modify, improve and redistribute**, keeping this license notice.
-- 💼 **Large company / commercial use above that size** needs a **commercial license** — reach me at **alexmachadovilela@gmail.com**.
-- ❌ No warranty. Provided "as is".
+- Free and open source.
+- You may use, modify, redistribute, and use it commercially.
+- Keep the copyright and license notice.
+- No warranty. Provided "as is".
 
 ---
 
 ## Contact
 
-- 📧 **Email** (questions & commercial license): **alexmachadovilela@gmail.com**
+- 📧 **Email**: **alexmachadovilela@gmail.com**
 - 🐦 **X / Twitter**: [@alexvilelaba](https://x.com/alexvilelaba)
 - 🐛 **Bugs / ideas**: [open an issue](https://github.com/alexvilelabah/bah-browser/issues)
 
